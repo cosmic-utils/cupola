@@ -8,7 +8,9 @@ use cosmic::{
         alignment::{Horizontal, Vertical},
     },
     theme,
-    widget::{column, container, horizontal_space, icon, image, row, scrollable, text},
+    widget::{
+        column, container, horizontal_space, icon, image, row, scrollable, text, vertical_space,
+    },
 };
 
 /// View state for single image display
@@ -104,7 +106,7 @@ impl SingleView {
                     let scaled_height = cached.height as f32 * self.zoom_level;
 
                     image(cached.handle.clone())
-                        .content_fit(ContentFit::Contain)
+                        .content_fit(ContentFit::Fill)
                         .width(Length::Fixed(scaled_width))
                         .height(Length::Fixed(scaled_height))
                 };
@@ -120,13 +122,17 @@ impl SingleView {
                         .padding(spacing.space_xxs)
                         .into()
                 } else {
-                    scrollable(
-                        container(image_widget)
-                            .center(Length::Shrink)
+                    container(scrollable(
+                        row()
+                            .push(horizontal_space().width(Length::Fill))
+                            .push(image_widget)
+                            .push(horizontal_space().width(Length::Fill))
+                            .align_y(Vertical::Center)
                             .padding(spacing.space_xxs),
-                    )
+                    ))
                     .width(Length::Fill)
                     .height(Length::Fill)
+                    .center(Length::Fill)
                     .into()
                 }
             } else {
