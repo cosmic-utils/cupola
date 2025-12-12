@@ -74,6 +74,8 @@ pub enum NavMessage {
     GoTo(usize),
     /// Directory scan completed
     DirectoryScanned(Vec<PathBuf>),
+    /// Select an image from the gallery and switch to single view
+    GallerySelect(usize),
 }
 
 #[derive(Debug, Clone)]

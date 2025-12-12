@@ -8,9 +8,7 @@ use cosmic::{
         alignment::{Horizontal, Vertical},
     },
     theme,
-    widget::{
-        column, container, horizontal_space, icon, image, row, scrollable, text, vertical_space,
-    },
+    widget::{column, container, horizontal_space, icon, image, row, scrollable, text},
 };
 
 /// View state for single image display

@@ -235,6 +235,11 @@ impl Application for ImageViewer {
                     self.nav.set_images(images, current.as_deref());
                     tasks.push(self.load_current_image());
                 }
+                NavMessage::GallerySelect(idx) => {
+                    self.nav.go_to(idx);
+                    self.view_mode = ViewMode::Single;
+                    tasks.push(self.load_current_image());
+                }
             },
             Message::View(view_msg) => match view_msg {
                 ViewMessage::ZoomIn => self.single_view.zoom_in(),

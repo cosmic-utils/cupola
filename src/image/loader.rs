@@ -121,7 +121,7 @@ pub async fn load_thumbnail(path: PathBuf, max_size: u32) -> Result<LoadedImage,
 fn load_thumbnail_sync(path: &Path, max_size: u32) -> Result<LoadedImage, LoadError> {
     let img = image::open(path)?;
     let thumbnail = img.thumbnail(max_size, max_size);
-    let rgba = thumbnail.to_rgb8();
+    let rgba = thumbnail.to_rgba8();
     let (width, height) = rgba.dimensions();
     let pixels = rgba.into_raw();
 
