@@ -21,9 +21,9 @@ menu-gallery = Gallery View
 menu-single = Single Image View
 
 # Menu - Navigate
-menu-navigate = Navigate
+menu-nav = Navigate
 menu-next = Next Image
-menu-pevious = Previous Image
+menu-prev = Previous Image
 menu-first = First Image
 menu-last = Last Image
 

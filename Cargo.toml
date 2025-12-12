@@ -8,8 +8,6 @@ description = "An image viewer written for the COSMIC Desktop, usable with all D
 repository = "https://codeberg.org/bhh32/cosmic-viewer"
 
 [dependencies]
-
-
 # Internationalization
 i18n-embed = { version = "0.16.0", features = ["fluent-system", "desktop-requester"] }
 i18n-embed-fl = "0.10.0"
