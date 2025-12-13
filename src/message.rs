@@ -73,7 +73,10 @@ pub enum NavMessage {
     /// Jump to specific index
     GoTo(usize),
     /// Directory scan completed
-    DirectoryScanned(Vec<PathBuf>),
+    DirectoryScanned {
+        images: Vec<PathBuf>,
+        target: PathBuf,
+    },
     /// Select an image in the gallery
     GallerySelect(usize),
 }

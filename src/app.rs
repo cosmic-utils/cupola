@@ -110,6 +110,7 @@ impl ImageViewer {
     fn scan_and_nav(&mut self, path: PathBuf) -> Task<Action<Message>> {
         let dir = nav::get_image_dir(&path);
         let include_hidden = self.config.show_hidden_files;
+        let target = path.clone();
 
         cosmic::task::future(async move {
             let images = if let Some(dir) = dir {
@@ -118,7 +119,7 @@ impl ImageViewer {
                 Vec::new()
             };
 
-            Message::Nav(NavMessage::DirectoryScanned(images))
+            Message::Nav(NavMessage::DirectoryScanned { images, target })
         })
     }
 
@@ -260,9 +261,8 @@ impl Application for ImageViewer {
                     self.nav.go_to(idx);
                     tasks.push(self.load_current_image());
                 }
-                NavMessage::DirectoryScanned(images) => {
-                    let current = self.nav.current().cloned();
-                    self.nav.set_images(images, current.as_deref());
+                NavMessage::DirectoryScanned { images, target } => {
+                    self.nav.set_images(images, Some(&target));
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::GallerySelect(idx) => {
