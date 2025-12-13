@@ -34,14 +34,14 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 # Libcosmic
 [dependencies.libcosmic]
-  git = "https://github.com/pop-os/libcosmic.git"
-  features = [
-    "tokio",
-    "winit",
-    "wgpu",
-    "a11y",
-    "rfd",
-  ]
+git = "https://github.com/pop-os/libcosmic.git"
+features = [
+  "tokio",
+  "winit",
+  "wgpu",
+  "a11y",
+  "rfd",
+]
 
 [features]
 default = []

@@ -76,6 +76,36 @@ impl ImageViewer {
         }
     }
 
+    /// Load the thumbnails for gallery view
+    fn load_thumbnails(&mut self) -> Task<Action<Message>> {
+        let thumbnail_size = self.config.thumbnail_size.pixels();
+        let mut tasks = Vec::new();
+
+        for path in self.nav.images().iter().cloned() {
+            if self.cache.get_thumbnail(&path).is_some() {
+                continue;
+            }
+
+            tasks.push(cosmic::task::future(async move {
+                match image::load_thumbnail(path.clone(), thumbnail_size).await {
+                    Ok(img) => Message::Image(ImageMessage::ThumbnailReady {
+                        path,
+                        handle: img.handle,
+                    }),
+                    Err(e) => {
+                        tracing::warn!("Thumbnail failed to load: {e}");
+                        Message::Image(ImageMessage::LoadFailed {
+                            path,
+                            error: e.to_string(),
+                        })
+                    }
+                }
+            }));
+        }
+
+        Task::batch(tasks)
+    }
+
     /// Scan directory and navigate to image
     fn scan_and_nav(&mut self, path: PathBuf) -> Task<Action<Message>> {
         let dir = nav::get_image_dir(&path);
@@ -235,6 +265,11 @@ impl Application for ImageViewer {
                     self.nav.set_images(images, current.as_deref());
                     tasks.push(self.load_current_image());
                 }
+                NavMessage::GallerySelect(idx) => {
+                    self.nav.go_to(idx);
+                    self.view_mode = ViewMode::Single;
+                    tasks.push(self.load_current_image());
+                }
             },
             Message::View(view_msg) => match view_msg {
                 ViewMessage::ZoomIn => self.single_view.zoom_in(),
@@ -246,9 +281,12 @@ impl Application for ImageViewer {
                     self.single_view.fit_to_window = false;
                 }
                 ViewMessage::ToggleFullScreen => {
-                    todo!()
+                    tracing::info!("Toggle Fullscreen clicked!");
                 }
-                ViewMessage::ShowGallery => self.view_mode = ViewMode::Gallery,
+                ViewMessage::ShowGallery => {
+                    self.view_mode = ViewMode::Gallery;
+                    tasks.push(self.load_thumbnails());
+                }
                 ViewMessage::ShowSingle => self.view_mode = ViewMode::Single,
                 ViewMessage::Pan { dx, dy } => self.single_view.pan(dx, dy),
             },
@@ -317,7 +355,7 @@ impl Application for ImageViewer {
         }
     }
 
-    fn context_drawer(&self) -> Option<context_drawer::ContextDrawer<Self::Message>> {
+    fn context_drawer(&self) -> Option<context_drawer::ContextDrawer<'_, Self::Message>> {
         let page = self.context_page?;
         let content = match page {
             ContextPage::About => self.about_page(),

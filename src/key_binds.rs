@@ -117,7 +117,7 @@ pub fn init_key_binds() -> HashMap<KeyBind, MenuAction> {
     binds.insert(
         KeyBind {
             modifiers: vec![Modifier::Ctrl],
-            key: Key::Character("=".into()),
+            key: Key::Character("0".into()),
         },
         MenuAction::ZoomReset,
     );

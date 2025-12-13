@@ -46,6 +46,10 @@ impl NavState {
         self.images.is_empty()
     }
 
+    pub fn images(&self) -> Vec<PathBuf> {
+        self.images.clone()
+    }
+
     /// Set images from a directory scan, optionally preserving selection
     pub fn set_images(&mut self, images: Vec<PathBuf>, select: Option<&Path>) {
         self.images = images;
