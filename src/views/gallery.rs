@@ -2,16 +2,19 @@
 
 use crate::{
     fl,
-    image::ImageCache,
+    image::{CachedImage, ImageCache},
     message::{Message, NavMessage, ViewMessage},
     nav::NavState,
+    views::SingleView,
 };
 use cosmic::{
     Element,
     iced::{Alignment, ContentFit, Length},
+    iced_widget::scrollable::{Direction, Scrollbar},
     theme,
     widget::{
-        self, button, column, container, horizontal_space, icon, row, scrollable, text, tooltip,
+        self, button, column, container, flex_row, horizontal_space, icon, image, popover, row,
+        scrollable, text, tooltip, vertical_space,
     },
 };
 use std::path::PathBuf;
@@ -23,6 +26,8 @@ pub struct GalleryView {
     pub selected: Vec<usize>,
     /// Number of cols in the grid
     pub cols: usize,
+    /// Currently open modal image index
+    pub modal_index: Option<usize>,
 }
 
 impl GalleryView {
@@ -30,7 +35,23 @@ impl GalleryView {
         Self {
             selected: Vec::new(),
             cols: 4,
+            modal_index: None,
         }
+    }
+
+    /// Open modal for an image selection
+    pub fn open_modal(&mut self, index: usize) {
+        self.modal_index = Some(index);
+    }
+
+    /// Close an open modal
+    pub fn close_modal(&mut self) {
+        self.modal_index = None;
+    }
+
+    /// Check if an image selected modal is open
+    pub fn is_modal_open(&self) -> bool {
+        self.modal_index.is_some()
     }
 
     /// Toggle selection of an image
@@ -95,12 +116,136 @@ impl GalleryView {
         tooltip(cell, text(file_name), tooltip::Position::Bottom).into()
     }
 
+    /// Build the modal content for viewing a single image
+    fn modal_content<'a>(
+        &self,
+        cached: &CachedImage,
+        single_view: &SingleView,
+    ) -> Element<'static, Message> {
+        let spacing = theme::active().cosmic().spacing;
+        let image_widget = if single_view.fit_to_window {
+            image(cached.handle.clone())
+                .content_fit(ContentFit::Contain)
+                .width(Length::Fill)
+                .height(Length::Fill)
+        } else {
+            let scaled_width = cached.width as f32 * single_view.zoom_level;
+            let scaled_height = cached.height as f32 * single_view.zoom_level;
+
+            image(cached.handle.clone())
+                .content_fit(ContentFit::Fill)
+                .width(Length::Fixed(scaled_width))
+                .height(Length::Fixed(scaled_height))
+        };
+
+        let img_container = container(if single_view.fit_to_window {
+            container(
+                // Column and row are used to center the image
+                // using vertical_space and horizontal_space widgets.
+                column()
+                    .push(vertical_space().height(Length::Fill))
+                    .push(
+                        row()
+                            .push(horizontal_space().width(Length::Fill))
+                            .push(
+                                container(image_widget)
+                                    .width(Length::Fill)
+                                    .height(Length::Fill)
+                                    .center(Length::Fill),
+                            )
+                            .push(horizontal_space().width(Length::Fill)),
+                    )
+                    .push(vertical_space().height(Length::Fill)),
+            )
+        } else {
+            container(
+                scrollable(container(image_widget).padding(spacing.space_xxs))
+                    .direction(Direction::Both {
+                        vertical: Scrollbar::default(),
+                        horizontal: Scrollbar::default(),
+                    })
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center(Length::Fill)
+        })
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+        let close_btn = button::icon(icon::from_name("window-close-symbolic"))
+            .on_press(Message::View(ViewMessage::CloseModal))
+            .padding(spacing.space_xs)
+            .class(theme::Button::Destructive);
+
+        let zoom_ctrls = row()
+            .push(
+                button::icon(icon::from_name("zoom-out-symbolic"))
+                    .on_press(Message::View(ViewMessage::ZoomOut))
+                    .padding(spacing.space_xs),
+            )
+            .push(
+                button::text(format!("{}%", single_view.zoom_percent()))
+                    .on_press(Message::View(ViewMessage::ZoomReset))
+                    .padding(spacing.space_xs),
+            )
+            .push(
+                button::icon(icon::from_name("zoom-in-symbolic"))
+                    .on_press(Message::View(ViewMessage::ZoomIn))
+                    .padding(spacing.space_xs),
+            )
+            .push(
+                button::icon(icon::from_name("zom-fit-best-symbolic"))
+                    .on_press(Message::View(ViewMessage::ZoomFit))
+                    .padding(spacing.space_xs),
+            )
+            .spacing(spacing.space_xs)
+            .align_y(Alignment::Center);
+
+        let header = row()
+            .push(horizontal_space())
+            .push(close_btn)
+            .width(Length::Fill)
+            .padding(spacing.space_xs);
+
+        let footer = row()
+            .push(horizontal_space())
+            .push(zoom_ctrls)
+            .push(horizontal_space())
+            .width(Length::Fill)
+            .padding(spacing.space_xs);
+
+        // Outer container creates the gaps around the modal to show the gallery,
+        // title bar, and status bar.
+        container(
+            // Inner container serves as a container for the header, image, and footer.
+            container(
+                // Column keeps the header, image, and footer aligned.
+                column()
+                    .push(header)
+                    .push(img_container)
+                    .push(footer)
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .class(theme::Container::Dialog),
+        )
+        .padding([60, 80])
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+    }
+
     /// Render the gallery view
     pub fn view(
         &self,
         nav: &NavState,
         cache: &ImageCache,
         thumbnail_size: u32,
+        single_view: &SingleView,
     ) -> Element<'_, Message> {
         let spacing = theme::active().cosmic().spacing;
         let images = nav.images();
@@ -119,25 +264,16 @@ impl GalleryView {
         }
 
         // Build grid
-        let mut grid = column().spacing(spacing.space_xs);
-        let mut current_row = row().spacing(spacing.space_xs);
-        let mut col_count = 0;
+        let mut cells = Vec::new();
 
         for (index, path) in images.iter().enumerate() {
             let cell = self.thumbnail_cell(index, path, cache, thumbnail_size);
-            current_row = current_row.push(cell);
-            col_count += 1;
-
-            if col_count >= self.cols {
-                grid = grid.push(current_row);
-                current_row = row().spacing(spacing.space_xs);
-                col_count = 0;
-            }
+            cells.push(cell.into());
         }
 
-        if col_count > 0 {
-            grid = grid.push(current_row);
-        }
+        let grid = flex_row(cells)
+            .column_spacing(spacing.space_xs)
+            .row_spacing(spacing.space_xs);
 
         let content = scrollable(container(grid).padding(spacing.space_s).width(Length::Fill))
             .width(Length::Fill)
@@ -155,11 +291,28 @@ impl GalleryView {
             .padding([spacing.space_xxs, spacing.space_s])
             .align_y(Alignment::Center);
 
-        column()
+        let gallery: Element<'_, Message> = column()
             .push(content)
             .push(status)
             .width(Length::Fill)
             .height(Length::Fill)
-            .into()
+            .into();
+
+        // If modal is open wrap with popover
+        if let Some(idx) = self.modal_index
+            && let Some(path) = images.get(idx)
+            && let Some(cached) = cache.get_full(path)
+        {
+            let modal = self.modal_content(&cached, single_view);
+
+            return popover(gallery)
+                .popup(modal)
+                .modal(true)
+                .position(popover::Position::Center)
+                .on_close(Message::View(ViewMessage::CloseModal))
+                .into();
+        }
+
+        gallery
     }
 }

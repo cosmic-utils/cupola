@@ -193,10 +193,12 @@ impl Application for ImageViewer {
             ViewMode::Single => self
                 .single_view
                 .view(&self.nav, &self.cache, self.is_loading),
-            ViewMode::Gallery => {
-                self.gallery_view
-                    .view(&self.nav, &self.cache, self.config.thumbnail_size.pixels())
-            }
+            ViewMode::Gallery => self.gallery_view.view(
+                &self.nav,
+                &self.cache,
+                self.config.thumbnail_size.pixels(),
+                &self.single_view,
+            ),
         }
     }
 
@@ -266,8 +268,8 @@ impl Application for ImageViewer {
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::GallerySelect(idx) => {
+                    self.gallery_view.open_modal(idx);
                     self.nav.go_to(idx);
-                    self.view_mode = ViewMode::Single;
                     tasks.push(self.load_current_image());
                 }
             },
@@ -289,6 +291,17 @@ impl Application for ImageViewer {
                 }
                 ViewMessage::ShowSingle => self.view_mode = ViewMode::Single,
                 ViewMessage::Pan { dx, dy } => self.single_view.pan(dx, dy),
+                ViewMessage::CloseModal => {
+                    // Close the modal
+                    self.gallery_view.close_modal();
+                    // Reset the zoom level and fit_to_window if it was changed.
+                    if self.single_view.zoom_level != 1.0 {
+                        self.single_view.zoom_level = 1.0;
+                        self.single_view.fit_to_window = true;
+                    }
+                }
+                ViewMessage::HoverPrev(show) => self.single_view.show_prev_btn = show,
+                ViewMessage::HoverNext(show) => self.single_view.show_prev_btn = show,
             },
             Message::KeyBind(action) => tasks.push(self.update(action.message())),
             Message::ToggleContextPage(page) => {
@@ -300,7 +313,9 @@ impl Application for ImageViewer {
             }
             Message::OpenFileDialog => {
                 return future(async {
-                    let mut dialog = Dialog::new().title(fl!("menu-open"));
+                    let mut dialog = Dialog::new()
+                        .title(fl!("menu-open"))
+                        .filter(FileFilter::new("All (*.*)").extension("*.*"));
 
                     for ext in EXTENSIONS {
                         let filter = FileFilter::new(format!("*.{ext}")).extension(ext.to_string());
@@ -323,8 +338,20 @@ impl Application for ImageViewer {
                 });
             }
             Message::OpenFolderDialog => {
-                tracing::info!("Open folder dialog requested");
-                // TODO: Implement folder dialog
+                return future(async {
+                    let dialog = Dialog::new().title(fl!("menu-open-folder"));
+                    match dialog.open_folder().await {
+                        Ok(response) => {
+                            if let Ok(dir) = response.url().to_file_path() {
+                                Message::OpenPath(dir)
+                            } else {
+                                Message::OpenError(Arc::new("Failed to open folder".to_string()))
+                            }
+                        }
+                        Err(file_chooser::Error::Cancelled) => Message::Cancelled,
+                        Err(why) => Message::OpenError(Arc::new(why.to_string())),
+                    }
+                });
             }
             Message::Cancelled => {}
             Message::OpenError(why) => eprintln!("{why}"),

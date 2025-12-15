@@ -101,4 +101,10 @@ pub enum ViewMessage {
     ShowSingle,
     /// Pan the image
     Pan { dx: f32, dy: f32 },
+    /// Hover Previous button
+    HoverPrev(bool),
+    /// Hover Next button
+    HoverNext(bool),
+    /// Close Gallery single view modal
+    CloseModal,
 }

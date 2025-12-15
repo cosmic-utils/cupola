@@ -1,6 +1,7 @@
 use crate::{fl, key_binds::MenuAction, message::Message};
 use cosmic::{
     Element,
+    iced::Length,
     widget::menu::{self, ItemHeight, ItemWidth, MenuBar, Tree},
 };
 use std::collections::HashMap;
@@ -14,6 +15,7 @@ pub fn menu_bar(key_binds: &HashMap<menu::KeyBind, MenuAction>) -> MenuBar<Messa
     ])
     .item_height(ItemHeight::Dynamic(40))
     .item_width(ItemWidth::Uniform(260))
+    .width(Length::Fill)
     .spacing(4.)
 }
 

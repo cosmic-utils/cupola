@@ -1,6 +1,11 @@
 //! Single image view
 
-use crate::{fl, image::ImageCache, message::Message, nav::NavState};
+use crate::{
+    fl,
+    image::ImageCache,
+    message::{Message, NavMessage, ViewMessage},
+    nav::NavState,
+};
 use cosmic::{
     Element,
     iced::{
@@ -8,7 +13,10 @@ use cosmic::{
         alignment::{Horizontal, Vertical},
     },
     theme,
-    widget::{column, container, horizontal_space, icon, image, row, scrollable, text},
+    widget::{
+        Space, button, column, container, horizontal_space, icon, image, mouse_area, row,
+        scrollable, text,
+    },
 };
 
 /// View state for single image display
@@ -20,6 +28,10 @@ pub struct SingleView {
     pub fit_to_window: bool,
     /// Pan offset
     pan_offset: (f32, f32),
+    /// Show the prev button
+    pub show_prev_btn: bool,
+    /// Show the next button
+    pub show_next_btn: bool,
 }
 
 impl Default for SingleView {
@@ -28,6 +40,8 @@ impl Default for SingleView {
             zoom_level: 1.0,
             fit_to_window: true,
             pan_offset: (0., 0.),
+            show_prev_btn: false,
+            show_next_btn: false,
         }
     }
 }
@@ -156,6 +170,55 @@ impl SingleView {
             .into()
         };
 
+        // Wrap content in prev/next overlay
+        let has_prev = nav.index() > 0;
+        let has_next = nav.index() < nav.total().saturating_sub(1);
+
+        // Prev button zone
+        let prev_zone = mouse_area(
+            container(if self.show_prev_btn && has_prev {
+                container(
+                    button::icon(icon::from_name("got-previous-symbolic").size(32))
+                        .on_press(Message::Nav(NavMessage::Prev))
+                        .padding(spacing.space_s)
+                        .class(theme::Button::Standard),
+                )
+            } else {
+                container(Space::new(Length::Fixed(64.), Length::Fill))
+            })
+            .height(Length::Fill)
+            .center_y(Length::Fill)
+            .padding([0, spacing.space_xs]),
+        )
+        .on_enter(Message::View(ViewMessage::HoverPrev(true)))
+        .on_exit(Message::View(ViewMessage::HoverPrev(false)));
+
+        // Next button zone
+        let next_zone = mouse_area(
+            container(if self.show_next_btn && has_next {
+                container(
+                    button::icon(icon::from_name("got-next-symbolic").size(32))
+                        .on_press(Message::Nav(NavMessage::Next))
+                        .padding(spacing.space_s)
+                        .class(theme::Button::Standard),
+                )
+            } else {
+                container(Space::new(Length::Fixed(64.), Length::Fill))
+            })
+            .height(Length::Fill)
+            .center_y(Length::Fill)
+            .padding([0, spacing.space_xs]),
+        )
+        .on_enter(Message::View(ViewMessage::HoverNext(true)))
+        .on_exit(Message::View(ViewMessage::HoverNext(false)));
+
+        let main_row = row()
+            .push(prev_zone)
+            .push(content)
+            .push(next_zone)
+            .width(Length::Fill)
+            .height(Length::Fill);
+
         let status_bar = if nav.total() > 0 {
             let status_text = fl!(
                 "status-image-count",
@@ -163,10 +226,15 @@ impl SingleView {
                 total = nav.total().to_string()
             );
 
-            let zoom_text = fl!(
-                "status-zoom-level",
-                percent = self.zoom_percent().to_string()
-            );
+            let zoom_text = if self.fit_to_window {
+                // TODO: Add status-zoom-fit to i18n: "Fit to Window"
+                "Fit to Window".into()
+            } else {
+                fl!(
+                    "status-zoom-level",
+                    percent = self.zoom_percent().to_string()
+                )
+            };
 
             row()
                 .push(text(status_text).size(12))
@@ -178,7 +246,7 @@ impl SingleView {
         };
 
         column()
-            .push(content)
+            .push(main_row)
             .push(status_bar)
             .width(Length::Fill)
             .height(Length::Fill)

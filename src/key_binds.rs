@@ -27,6 +27,7 @@ pub enum MenuAction {
     Last,
     GalleryView,
     SingleView,
+    CloseModal,
     About,
     Settings,
     ImageInfo,
@@ -50,6 +51,7 @@ impl MenuAction {
             MenuAction::Last => Message::Nav(NavMessage::Last),
             MenuAction::GalleryView => Message::View(ViewMessage::ShowGallery),
             MenuAction::SingleView => Message::View(ViewMessage::ShowSingle),
+            MenuAction::CloseModal => Message::View(ViewMessage::CloseModal),
             MenuAction::About => Message::ToggleContextPage(crate::message::ContextPage::About),
             MenuAction::Settings => {
                 Message::ToggleContextPage(crate::message::ContextPage::Settings)
@@ -101,7 +103,7 @@ pub fn init_key_binds() -> HashMap<KeyBind, MenuAction> {
     binds.insert(
         KeyBind {
             modifiers: vec![Modifier::Ctrl],
-            key: Key::Character("+".into()),
+            key: Key::Character("=".into()),
         },
         MenuAction::ZoomIn,
     );
@@ -183,9 +185,17 @@ pub fn init_key_binds() -> HashMap<KeyBind, MenuAction> {
     binds.insert(
         KeyBind {
             modifiers: vec![],
-            key: Key::Named(Named::Escape),
+            key: Key::Character("s".into()),
         },
         MenuAction::SingleView,
+    );
+
+    binds.insert(
+        KeyBind {
+            modifiers: vec![],
+            key: Key::Named(Named::Escape),
+        },
+        MenuAction::CloseModal,
     );
 
     // Info
