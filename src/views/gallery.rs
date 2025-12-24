@@ -9,7 +9,10 @@ use crate::{
 };
 use cosmic::{
     Element,
-    iced::{Alignment, ContentFit, Length},
+    iced::{
+        Alignment, ContentFit, Length,
+        alignment::{Horizontal, Vertical},
+    },
     iced_widget::scrollable::{Direction, Scrollbar},
     theme,
     widget::{
@@ -123,11 +126,12 @@ impl GalleryView {
         image_state: &ImageViewState,
     ) -> Element<'static, Message> {
         let spacing = theme::active().cosmic().spacing;
+
         let image_widget = if image_state.fit_to_window {
             image(cached.handle.clone())
                 .content_fit(ContentFit::Contain)
-                .width(Length::Fill)
-                .height(Length::Fill)
+                .width(Length::Shrink)
+                .height(Length::Shrink)
         } else {
             let scaled_width = cached.width as f32 * image_state.zoom_level;
             let scaled_height = cached.height as f32 * image_state.zoom_level;
@@ -138,59 +142,55 @@ impl GalleryView {
                 .height(Length::Fixed(scaled_height))
         };
 
-        let img_container = container(if image_state.fit_to_window {
-            container(
-                // Column and row are used to center the image
-                // using vertical_space and horizontal_space widgets.
-                column()
-                    .push(vertical_space().height(Length::Fill))
-                    .push(
-                        row()
-                            .push(
-                                column()
-                                    .push(vertical_space().height(Length::Fill))
-                                    .push(
-                                        button::icon(icon::from_name("go-previous-symbolic"))
-                                            .on_press(Message::Nav(NavMessage::Prev)),
-                                    )
-                                    .push(vertical_space().height(Length::Fill)),
-                            )
-                            .push(horizontal_space().width(Length::Fill))
-                            .push(
-                                container(image_widget)
-                                    .width(Length::Fill)
-                                    .height(Length::Fill)
-                                    .center(Length::Fill),
-                            )
-                            .push(horizontal_space().width(Length::Fill))
-                            .push(
-                                column()
-                                    .push(vertical_space().height(Length::Fill))
-                                    .push(
-                                        button::icon(icon::from_name("go-next-symbolic"))
-                                            .on_press(Message::Nav(NavMessage::Next)),
-                                    )
-                                    .push(vertical_space().height(Length::Fill)),
-                            ),
-                    )
-                    .push(vertical_space().height(Length::Fill)),
-            )
+        let prev_btn = container(
+            button::icon(icon::from_name("go-previous-symbolic"))
+                .on_press(Message::Nav(NavMessage::Prev)),
+        )
+        .width(Length::Shrink)
+        .height(Length::Fill)
+        .center_y(Length::Fill);
+
+        let next_btn = container(
+            button::icon(icon::from_name("go-next-symbolic"))
+                .on_press(Message::Nav(NavMessage::Next)),
+        )
+        .width(Length::Shrink)
+        .height(Length::Fill)
+        .center_y(Length::Fill);
+
+        let img_container = if image_state.fit_to_window {
+            container(image_widget)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Center)
+                .center(Length::Fill)
+                .padding(spacing.space_xs)
         } else {
+            // Wrap in scrollable for zoomed images, centering content
             container(
-                scrollable(container(image_widget).padding(spacing.space_xxs))
-                    .direction(Direction::Both {
-                        vertical: Scrollbar::default(),
-                        horizontal: Scrollbar::default(),
-                    })
-                    .width(Length::Fill)
-                    .height(Length::Fill),
+                scrollable(
+                    container(image_widget)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .center(Length::Fill)
+                        .padding(spacing.space_xxs),
+                )
+                .direction(Direction::Both {
+                    vertical: Scrollbar::default(),
+                    horizontal: Scrollbar::default(),
+                })
+                .width(Length::Fill)
+                .height(Length::Fill),
             )
+        };
+
+        let content_row = row()
+            .push(prev_btn)
+            .push(img_container)
+            .push(next_btn)
             .width(Length::Fill)
-            .height(Length::Fill)
-            .center(Length::Fill)
-        })
-        .width(Length::Fill)
-        .height(Length::Fill);
+            .height(Length::Fill);
 
         let close_btn = button::icon(icon::from_name("window-close-symbolic"))
             .on_press(Message::View(ViewMessage::CloseModal))
@@ -203,11 +203,15 @@ impl GalleryView {
                     .on_press(Message::View(ViewMessage::ZoomOut))
                     .padding(spacing.space_xs),
             )
-            .push(
-                button::text(format!("{}%", image_state.zoom_percent()))
-                    .on_press(Message::View(ViewMessage::ZoomReset))
-                    .padding(spacing.space_xs),
-            )
+            .push(if image_state.fit_to_window {
+                container(text::body("Fit to Window")).padding(spacing.space_xs)
+            } else {
+                container(
+                    button::text(format!("{}%", image_state.zoom_percent()))
+                        .on_press(Message::View(ViewMessage::ZoomReset)),
+                )
+                .padding(spacing.space_xs)
+            })
             .push(
                 button::icon(icon::from_name("zoom-in-symbolic"))
                     .on_press(Message::View(ViewMessage::ZoomIn))
@@ -242,7 +246,7 @@ impl GalleryView {
                 // Column keeps the header, image, and footer aligned.
                 column()
                     .push(header)
-                    .push(img_container)
+                    .push(content_row)
                     .push(footer)
                     .width(Length::Fill)
                     .height(Length::Fill),

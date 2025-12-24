@@ -1,5 +1,5 @@
 pub mod gallery;
-pub mod single;
+pub mod image_view_state;
 
 pub use gallery::GalleryView;
-pub use single::ImageViewState;
+pub use image_view_state::ImageViewState;
