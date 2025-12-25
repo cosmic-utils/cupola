@@ -1,23 +1,14 @@
-//! Single image view
+//! Zoom/pan state for the modal image view
 
-use crate::{
-    fl,
-    image::ImageCache,
-    message::{Message, NavMessage, ViewMessage},
-    nav::NavState,
-};
+use crate::message::Message;
 use cosmic::{
-    Element,
-    iced::{
-        Alignment, ContentFit, Length,
-        alignment::{Horizontal, Vertical},
-    },
-    theme,
-    widget::{
-        Space, button, column, container, horizontal_space, icon, image, mouse_area, row,
-        scrollable, text,
-    },
+    Task,
+    iced_widget::scrollable,
+    widget::Id,
 };
+
+/// ID for the modal's scrollable widget
+const MODAL_SCROLL_ID: &str = "modal-image-scroll";
 
 /// View state for single image display
 #[derive(Debug, Clone)]
@@ -26,12 +17,13 @@ pub struct ImageViewState {
     pub zoom_level: f32,
     /// Fit mode enabled
     pub fit_to_window: bool,
-    /// Pan offset
-    pan_offset: (f32, f32),
-    /// Show the prev button
-    pub show_prev_btn: bool,
-    /// Show the next button
-    pub show_next_btn: bool,
+    /// Calculated fit zoom from viewport
+    pub fit_zoom: f32,
+    /// Scrollable ID for programmatic scroll control
+    pub scroll_id: Id,
+    /// Current window dimensions for fit_zoom calculation
+    pub window_width: f32,
+    pub window_height: f32,
 }
 
 impl Default for ImageViewState {
@@ -39,9 +31,10 @@ impl Default for ImageViewState {
         Self {
             zoom_level: 1.0,
             fit_to_window: true,
-            pan_offset: (0., 0.),
-            show_prev_btn: false,
-            show_next_btn: false,
+            fit_zoom: 1.0,
+            scroll_id: Id::new(MODAL_SCROLL_ID),
+            window_width: 0.0,
+            window_height: 0.0,
         }
     }
 }
@@ -52,205 +45,79 @@ impl ImageViewState {
     }
 
     /// Zoom in by 25%
-    pub fn zoom_in(&mut self) {
+    pub fn zoom_in(&mut self) -> Task<Message> {
+        // Start from fit_zoom if coming from fit mode
+        if self.fit_to_window {
+            self.zoom_level = self.fit_zoom;
+        }
         self.fit_to_window = false;
         self.zoom_level = (self.zoom_level * 1.25).min(10.);
+        self.scroll_to_center()
     }
 
     /// Zoom out by 25%
-    pub fn zoom_out(&mut self) {
+    pub fn zoom_out(&mut self) -> Task<Message> {
+        // Start from fit_zoom if coming from fit mode
+        if self.fit_to_window {
+            self.zoom_level = self.fit_zoom;
+        }
         self.fit_to_window = false;
         self.zoom_level = (self.zoom_level / 1.25).max(0.1);
+        self.scroll_to_center()
     }
 
     /// Reset zoom to 100%
-    pub fn zoom_reset(&mut self) {
+    pub fn zoom_reset(&mut self) -> Task<Message> {
         self.fit_to_window = false;
         self.zoom_level = 1.0;
-        self.pan_offset = (0., 0.);
+        self.scroll_to_center()
     }
 
     /// Enable fit-to-window mode
     pub fn zoom_fit(&mut self) {
         self.fit_to_window = true;
-        self.zoom_level = 1.0;
-        self.pan_offset = (0., 0.);
     }
 
-    /// Pan the image
-    pub fn pan(&mut self, dx: f32, dy: f32) {
-        self.pan_offset.0 += dx;
-        self.pan_offset.1 += dy;
+    /// Update stored window dimensions
+    pub fn set_window_size(&mut self, width: f32, height: f32) {
+        self.window_width = width;
+        self.window_height = height;
     }
 
-    /// Get zoom as percentage for display
-    pub fn zoom_percent(&self) -> u32 {
-        (self.zoom_level * 100.) as u32
+    /// Calculates fit_zoom from window size and image dimensions
+    pub fn calculate_fit_zoom(&mut self, img_width: u32, img_height: u32) {
+        if self.window_width <= 0.0 || self.window_height <= 0.0 {
+            return; // No valid window dimensions yet
+        }
+
+        // Modal padding from window edges
+        let modal_pad_x = 80.0 * 2.0;
+        let modal_pad_y = 60.0 * 2.0;
+        // Header and footer height
+        let header_height = 48.0;
+        let footer_height = 48.0;
+        // Nav button widths
+        let nav_btn_width = 48.0 * 2.0;
+        // Container padding inside modal
+        let container_pad = 16.0;
+
+        let available_width = self.window_width - modal_pad_x - nav_btn_width - container_pad;
+        let available_height = self.window_height - modal_pad_y - header_height - footer_height - container_pad;
+
+        if available_width <= 0.0 || available_height <= 0.0 {
+            return; // Window too small
+        }
+
+        let zoom_x = available_width / img_width as f32;
+        let zoom_y = available_height / img_height as f32;
+        self.fit_zoom = zoom_x.min(zoom_y).min(1.0);
     }
 
-    /// Render the single image view
-    pub fn view(
-        &self,
-        nav: &NavState,
-        cache: &ImageCache,
-        is_loading: bool,
-    ) -> Element<'_, Message> {
-        let spacing = theme::active().cosmic().spacing;
-
-        let content: Element<'_, Message> = if is_loading {
-            container(
-                column()
-                    .push(text(fl!("status-loading")))
-                    .spacing(spacing.space_s)
-                    .align_x(Alignment::Center),
-            )
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .into()
-        } else if let Some(path) = nav.current() {
-            if let Some(cached) = cache.get_full(path) {
-                let image_widget = if self.fit_to_window {
-                    image(cached.handle.clone())
-                        .content_fit(ContentFit::Contain)
-                        .height(Length::Fill)
-                } else {
-                    let scaled_width = cached.width as f32 * self.zoom_level;
-                    let scaled_height = cached.height as f32 * self.zoom_level;
-
-                    image(cached.handle.clone())
-                        .content_fit(ContentFit::Fill)
-                        .width(Length::Fixed(scaled_width))
-                        .height(Length::Fixed(scaled_height))
-                };
-
-                if self.fit_to_window {
-                    row()
-                        .push(horizontal_space().width(Length::Fill))
-                        .push(image_widget)
-                        .push(horizontal_space().width(Length::Fill))
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_y(Vertical::Center)
-                        .padding(spacing.space_xxs)
-                        .into()
-                } else {
-                    container(scrollable(
-                        row()
-                            .push(horizontal_space().width(Length::Fill))
-                            .push(image_widget)
-                            .push(horizontal_space().width(Length::Fill))
-                            .align_y(Vertical::Center)
-                            .padding(spacing.space_xxs),
-                    ))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center(Length::Fill)
-                    .into()
-                }
-            } else {
-                container(
-                    column()
-                        .push(text(fl!("status-loading")))
-                        .spacing(spacing.space_s)
-                        .align_x(Alignment::Center),
-                )
-                .center(Length::Fill)
-                .into()
-            }
-        } else {
-            container(
-                column()
-                    .push(icon::from_name("image-x-generic-symbolic").size(64))
-                    .push(text(fl!("status-no-image")).size(16))
-                    .spacing(spacing.space_m)
-                    .align_x(Alignment::Center),
-            )
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .into()
-        };
-
-        // Wrap content in prev/next overlay
-        let has_prev = nav.index() > 0;
-        let has_next = nav.index() < nav.total().saturating_sub(1);
-
-        // Prev button zone
-        let prev_zone = mouse_area(
-            container(if self.show_prev_btn && has_prev {
-                container(
-                    button::icon(icon::from_name("go-previous-symbolic").size(32))
-                        .on_press(Message::Nav(NavMessage::Prev))
-                        .padding(spacing.space_s)
-                        .class(theme::Button::Standard),
-                )
-            } else {
-                container(Space::new(Length::Fixed(64.), Length::Fill))
-            })
-            .height(Length::Fill)
-            .center_y(Length::Fill)
-            .padding([0, spacing.space_xs]),
+    /// Scroll to center of the image
+    fn scroll_to_center(&self) -> Task<Message> {
+        scrollable::snap_to(
+            self.scroll_id.clone(),
+            scrollable::RelativeOffset { x: 0.5, y: 0.5 },
         )
-        .on_enter(Message::View(ViewMessage::HoverPrev(true)))
-        .on_exit(Message::View(ViewMessage::HoverPrev(false)));
-
-        // Next button zone
-        let next_zone = mouse_area(
-            container(if self.show_next_btn && has_next {
-                container(
-                    button::icon(icon::from_name("go-next-symbolic").size(32))
-                        .on_press(Message::Nav(NavMessage::Next))
-                        .padding(spacing.space_s)
-                        .class(theme::Button::Standard),
-                )
-            } else {
-                container(Space::new(Length::Fixed(64.), Length::Fill))
-            })
-            .height(Length::Fill)
-            .center_y(Length::Fill)
-            .padding([0, spacing.space_xs]),
-        )
-        .on_enter(Message::View(ViewMessage::HoverNext(true)))
-        .on_exit(Message::View(ViewMessage::HoverNext(false)));
-
-        let main_row = row()
-            .push(prev_zone)
-            .push(content)
-            .push(next_zone)
-            .width(Length::Fill)
-            .height(Length::Fill);
-
-        let status_bar = if nav.total() > 0 {
-            let status_text = fl!(
-                "status-image-count",
-                current = (nav.index() + 1).to_string(),
-                total = nav.total().to_string()
-            );
-
-            let zoom_text = if self.fit_to_window {
-                // TODO: Add status-zoom-fit to i18n: "Fit to Window"
-                "Fit to Window".into()
-            } else {
-                fl!(
-                    "status-zoom-level",
-                    percent = self.zoom_percent().to_string()
-                )
-            };
-
-            row()
-                .push(text(status_text).size(12))
-                .push(horizontal_space())
-                .push(text(zoom_text).size(12))
-                .padding([spacing.space_xxs, spacing.space_s])
-        } else {
-            row()
-        };
-
-        column()
-            .push(main_row)
-            .push(status_bar)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Horizontal::Center)
-            .into()
     }
 }

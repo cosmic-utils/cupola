@@ -9,15 +9,12 @@ use crate::{
 };
 use cosmic::{
     Element,
-    iced::{
-        Alignment, ContentFit, Length,
-        alignment::{Horizontal, Vertical},
-    },
+    iced::{Alignment, ContentFit, Length},
     iced_widget::scrollable::{Direction, Scrollbar},
     theme,
     widget::{
-        self, button, column, container, flex_row, horizontal_space, icon, image, popover, row,
-        scrollable, text, tooltip, vertical_space,
+        self, button, column, container, flex_row, horizontal_space, icon, image, popover,
+        responsive, row, scrollable, text, tooltip,
     },
 };
 use std::path::PathBuf;
@@ -77,7 +74,7 @@ impl GalleryView {
     }
 
     /// Create a thumbnail cell
-    fn thumbnail_cell<'a>(
+    fn thumbnail_cell(
         &self,
         index: usize,
         path: &PathBuf,
@@ -120,27 +117,20 @@ impl GalleryView {
     }
 
     /// Build the modal content for viewing a single image
-    fn modal_content<'a>(
+    fn modal_content(
         &self,
         cached: &CachedImage,
         image_state: &ImageViewState,
     ) -> Element<'static, Message> {
         let spacing = theme::active().cosmic().spacing;
 
-        let image_widget = if image_state.fit_to_window {
-            image(cached.handle.clone())
-                .content_fit(ContentFit::Contain)
-                .width(Length::Shrink)
-                .height(Length::Shrink)
-        } else {
-            let scaled_width = cached.width as f32 * image_state.zoom_level;
-            let scaled_height = cached.height as f32 * image_state.zoom_level;
-
-            image(cached.handle.clone())
-                .content_fit(ContentFit::Fill)
-                .width(Length::Fixed(scaled_width))
-                .height(Length::Fixed(scaled_height))
-        };
+        // Data for responsive closure
+        let handle = cached.handle.clone();
+        let img_width = cached.width as f32;
+        let img_height = cached.height as f32;
+        let fit_to_window = image_state.fit_to_window;
+        let zoom_level = image_state.zoom_level;
+        let scroll_id = image_state.scroll_id.clone();
 
         let prev_btn = container(
             button::icon(icon::from_name("go-previous-symbolic"))
@@ -158,56 +148,93 @@ impl GalleryView {
         .height(Length::Fill)
         .center_y(Length::Fill);
 
-        let img_container = if image_state.fit_to_window {
-            container(image_widget)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .align_x(Horizontal::Center)
-                .align_y(Vertical::Center)
-                .center(Length::Fill)
-                .padding(spacing.space_xs)
-        } else {
-            // Wrap in scrollable for zoomed images, centering content
-            container(
-                scrollable(
-                    container(image_widget)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .center(Length::Fill)
-                        .padding(spacing.space_xxs),
-                )
-                .direction(Direction::Both {
-                    vertical: Scrollbar::default(),
-                    horizontal: Scrollbar::default(),
-                })
-                .width(Length::Fill)
-                .height(Length::Fill),
-            )
-        };
-
-        let content_row = row()
-            .push(prev_btn)
-            .push(img_container)
-            .push(next_btn)
-            .width(Length::Fill)
-            .height(Length::Fill);
-
         let close_btn = button::icon(icon::from_name("window-close-symbolic"))
             .on_press(Message::View(ViewMessage::CloseModal))
             .padding(spacing.space_xs)
             .class(theme::Button::Destructive);
 
+        let header = row()
+            .push(horizontal_space())
+            .push(close_btn)
+            .width(Length::Fill)
+            .padding(spacing.space_xs);
+
+        // Responsive gives us viewport size for zoom calc
+        let image_area = responsive(move |size| {
+            // Account for container padding
+            let available_width = size.width - (spacing.space_xs * 2) as f32;
+            let available_height = size.height - (spacing.space_xs * 2) as f32;
+
+            // Calculate fit zoom level
+            let fit_zoom_calc = {
+                let zoom_x = available_width / img_width;
+                let zoom_y = available_height / img_height;
+                zoom_x.min(zoom_y).min(1.0)
+            };
+
+            // Pick zoom based on mode
+            let effective_zoom = if fit_to_window {
+                fit_zoom_calc
+            } else {
+                zoom_level
+            };
+
+            let scaled_width = img_width * effective_zoom;
+            let scaled_height = img_height * effective_zoom;
+
+            // Center padding
+            let pad_x = ((available_width - scaled_width) / 2.0).max(0.0);
+            let pad_y = ((available_height - scaled_height) / 2.0).max(0.0);
+
+            let image_widget = image(handle.clone())
+                .content_fit(ContentFit::Fill)
+                .width(Length::Fixed(scaled_width))
+                .height(Length::Fixed(scaled_height));
+
+            // Scrollable only when zoomed past viewport
+            if scaled_width > available_width || scaled_height > available_height {
+                container(
+                    scrollable(
+                        container(image_widget)
+                            .width(Length::Shrink)
+                            .height(Length::Shrink)
+                            .padding([pad_y, pad_x]),
+                    )
+                    .id(scroll_id.clone())
+                    .direction(Direction::Both {
+                        vertical: Scrollbar::default(),
+                        horizontal: Scrollbar::default(),
+                    })
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+            } else {
+                // Just center it
+                container(image_widget)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center(Length::Fill)
+                    .into()
+            }
+        });
+
+        // Zoom controls
+        let fit_zoom_display = image_state.fit_zoom;
         let zoom_ctrls = row()
             .push(
                 button::icon(icon::from_name("zoom-out-symbolic"))
                     .on_press(Message::View(ViewMessage::ZoomOut))
                     .padding(spacing.space_xs),
             )
-            .push(if image_state.fit_to_window {
-                container(text::body("Fit to Window")).padding(spacing.space_xs)
+            .push(if fit_to_window {
+                container(text::body(format!("Fit ({}%)", (fit_zoom_display * 100.0) as u32)))
+                    .padding(spacing.space_xs)
             } else {
                 container(
-                    button::text(format!("{}%", image_state.zoom_percent()))
+                    button::text(format!("{}%", (zoom_level * 100.0) as u32))
                         .on_press(Message::View(ViewMessage::ZoomReset)),
                 )
                 .padding(spacing.space_xs)
@@ -225,12 +252,6 @@ impl GalleryView {
             .spacing(spacing.space_xs)
             .align_y(Alignment::Center);
 
-        let header = row()
-            .push(horizontal_space())
-            .push(close_btn)
-            .width(Length::Fill)
-            .padding(spacing.space_xs);
-
         let footer = row()
             .push(horizontal_space())
             .push(zoom_ctrls)
@@ -238,12 +259,16 @@ impl GalleryView {
             .width(Length::Fill)
             .padding(spacing.space_xs);
 
-        // Outer container creates the gaps around the modal to show the gallery,
-        // title bar, and status bar.
+        let content_row = row()
+            .push(prev_btn)
+            .push(image_area)
+            .push(next_btn)
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        // Outer padding lets gallery peek through
         container(
-            // Inner container serves as a container for the header, image, and footer.
             container(
-                // Column keeps the header, image, and footer aligned.
                 column()
                     .push(header)
                     .push(content_row)
@@ -290,7 +315,7 @@ impl GalleryView {
 
         for (index, path) in images.iter().enumerate() {
             let cell = self.thumbnail_cell(index, path, cache, thumbnail_size);
-            cells.push(cell.into());
+            cells.push(cell);
         }
 
         let grid = flex_row(cells)

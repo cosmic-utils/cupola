@@ -33,7 +33,7 @@ impl ImageCache {
                 NonZeroUsize::new(full_capacity.max(1)).unwrap(),
             ))),
             thumbnails: Arc::new(Mutex::new(LruCache::new(
-                NonZeroUsize::new(full_capacity.max(1)).unwrap(),
+                NonZeroUsize::new(thumbnail_capacity.max(1)).unwrap(),
             ))),
             pending: Arc::new(Mutex::new(HashSet::new())),
         }

@@ -135,6 +135,15 @@ impl ImageViewer {
         Task::batch(tasks)
     }
 
+    /// Recalculate fit_zoom for the current image
+    fn update_fit_zoom(&mut self) {
+        if let Some(path) = self.nav.current()
+            && let Some(cached) = self.cache.get_full(path)
+        {
+            self.image_state.calculate_fit_zoom(cached.width, cached.height);
+        }
+    }
+
     /// Scan directory and navigate to image
     fn scan_and_nav(&mut self, path: PathBuf) -> Task<Action<Message>> {
         let dir = nav::get_image_dir(&path);
@@ -218,7 +227,7 @@ impl Application for ImageViewer {
             None
         };
 
-        let startup_path = startup_path.or_else(|| dirs::picture_dir());
+        let startup_path = startup_path.or_else(dirs::picture_dir);
 
         tasks.push(app.set_window_title(fl!("app-title"), app.core.main_window_id().unwrap()));
         if let Some(path) = startup_path {
@@ -258,13 +267,17 @@ impl Application for ImageViewer {
                 } => {
                     self.is_loading = false;
                     self.cache.insert_full(
-                        path,
+                        path.clone(),
                         CachedImage {
                             handle,
                             width,
                             height,
                         },
                     );
+                    // Update fit_zoom if this is the current image
+                    if self.nav.current() == Some(&path) {
+                        self.image_state.calculate_fit_zoom(width, height);
+                    }
                     tasks.push(self.update_title());
                 }
                 ImageMessage::LoadFailed { path, error } => {
@@ -283,30 +296,38 @@ impl Application for ImageViewer {
             },
             Message::Nav(nav_msg) => match nav_msg {
                 NavMessage::Next => {
-                    self.nav.next();
-                    // Ensure the modal index for gallery view is updated appropriately
+                    self.nav.go_next();
                     self.gallery_view.modal_index = Some(self.nav.index());
+                    self.image_state.zoom_fit(); // Reset to fit mode for new image
+                    self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::Prev => {
-                    self.nav.prev();
-                    // Ensure the modal index for gallery view is updated appropriately
+                    self.nav.go_prev();
                     self.gallery_view.modal_index = Some(self.nav.index());
+                    self.image_state.zoom_fit(); // Reset to fit mode for new image
+                    self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::First => {
                     self.nav.first();
                     self.gallery_view.modal_index = Some(self.nav.index());
+                    self.image_state.zoom_fit(); // Reset to fit mode for new image
+                    self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::Last => {
                     self.nav.last();
                     self.gallery_view.modal_index = Some(self.nav.index());
+                    self.image_state.zoom_fit(); // Reset to fit mode for new image
+                    self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::GoTo(idx) => {
                     self.nav.go_to(idx);
                     self.gallery_view.modal_index = Some(self.nav.index());
+                    self.image_state.zoom_fit(); // Reset to fit mode for new image
+                    self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::DirectoryScanned { images, target } => {
@@ -325,7 +346,7 @@ impl Application for ImageViewer {
                         }
                     }
 
-                    // Auto-open modal if an image was selected to open the program
+                    // Open modal if started with an image
                     if self.nav.total() > 0 {
                         self.gallery_view.open_modal(self.nav.index());
                     }
@@ -337,33 +358,34 @@ impl Application for ImageViewer {
                 NavMessage::GallerySelect(idx) => {
                     self.gallery_view.open_modal(idx);
                     self.nav.go_to(idx);
+                    self.image_state.zoom_fit(); // Reset to fit mode for new image
+                    self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
             },
             Message::View(view_msg) => match view_msg {
-                ViewMessage::ZoomIn => self.image_state.zoom_in(),
-                ViewMessage::ZoomOut => self.image_state.zoom_out(),
-                ViewMessage::ZoomReset => self.image_state.zoom_reset(),
-                ViewMessage::ZoomFit => self.image_state.zoom_fit(),
-                ViewMessage::ZoomSet(level) => {
-                    self.image_state.zoom_level = level;
-                    self.image_state.fit_to_window = false;
+                ViewMessage::ZoomIn => {
+                    tasks.push(self.image_state.zoom_in().map(Action::from))
                 }
+                ViewMessage::ZoomOut => {
+                    tasks.push(self.image_state.zoom_out().map(Action::from))
+                }
+                ViewMessage::ZoomReset => {
+                    tasks.push(self.image_state.zoom_reset().map(Action::from))
+                }
+                ViewMessage::ZoomFit => self.image_state.zoom_fit(),
                 ViewMessage::ToggleFullScreen => {
                     tracing::info!("Toggle Fullscreen clicked!");
                 }
-                ViewMessage::Pan { dx, dy } => self.image_state.pan(dx, dy),
                 ViewMessage::CloseModal => {
                     // Close the modal
                     self.gallery_view.close_modal();
-                    // Reset the zoom level and fit_to_window if it was changed.
+                    // Reset zoom state
                     if self.image_state.zoom_level != 1.0 {
                         self.image_state.zoom_level = 1.0;
                         self.image_state.fit_to_window = true;
                     }
                 }
-                ViewMessage::HoverPrev(show) => self.image_state.show_prev_btn = show,
-                ViewMessage::HoverNext(show) => self.image_state.show_prev_btn = show,
             },
             Message::KeyBind(action) => tasks.push(self.update(action.message())),
             Message::ToggleContextPage(page) => {
@@ -435,6 +457,15 @@ impl Application for ImageViewer {
                     }
                 }
             }
+            Message::WindowResized { width, height } => {
+                self.image_state.set_window_size(width, height);
+                // Update fit_zoom for current image
+                if let Some(path) = self.nav.current()
+                    && let Some(cached) = self.cache.get_full(path)
+                {
+                    self.image_state.calculate_fit_zoom(cached.width, cached.height);
+                }
+            }
         }
 
         if tasks.is_empty() {
@@ -459,7 +490,19 @@ impl Application for ImageViewer {
     }
 
     fn subscription(&self) -> cosmic::iced::Subscription<Self::Message> {
-        cosmic::iced::keyboard::on_key_press(|key, modifiers| key_press_handler(key, modifiers))
+        cosmic::iced::Subscription::batch([
+            cosmic::iced::keyboard::on_key_press(key_press_handler),
+            cosmic::iced::window::events().map(|(_, event)| {
+                if let cosmic::iced::window::Event::Resized(size) = event {
+                    Message::WindowResized {
+                        width: size.width,
+                        height: size.height,
+                    }
+                } else {
+                    Message::Cancelled // Use existing no-op message for other window events
+                }
+            }),
+        ])
     }
 
     fn on_app_exit(&mut self) -> Option<Self::Message> {

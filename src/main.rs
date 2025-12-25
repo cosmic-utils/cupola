@@ -7,7 +7,6 @@ pub mod menu;
 pub mod message;
 pub mod nav;
 pub mod views;
-pub mod widgets;
 
 use app::ImageViewer;
 use std::path::PathBuf;
@@ -26,7 +25,7 @@ fn main() -> cosmic::iced::Result {
             .min_height(300.0),
     );
 
-    let optional_image = std::env::args().nth(1).map(|img| PathBuf::from(img));
+    let optional_image = std::env::args().nth(1).map(PathBuf::from);
 
     cosmic::app::run::<ImageViewer>(settings, optional_image)
 }

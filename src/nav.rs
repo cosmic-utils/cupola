@@ -13,12 +13,11 @@ pub const EXTENSIONS: &[&str] = &[
     "nef", "arw", "dng", "orf", "rw2",
 ];
 
-/// Navigation state for browsing images in a directory
+/// Tracks current position in the image list
 #[derive(Debug, Clone, Default)]
 pub struct NavState {
     images: Vec<PathBuf>,
     cur_idx: usize,
-    cur_dir: Option<PathBuf>,
 }
 
 impl NavState {
@@ -50,7 +49,7 @@ impl NavState {
         self.images.clone()
     }
 
-    /// Set images from a directory scan, optionally preserving selection
+    /// Set images list, optionally selecting a specific path
     pub fn set_images(&mut self, images: Vec<PathBuf>, select: Option<&Path>) {
         self.images = images;
         if let Some(path) = select {
@@ -61,7 +60,7 @@ impl NavState {
     }
 
     /// Nav to next image, wrapping around
-    pub fn next(&mut self) -> Option<&PathBuf> {
+    pub fn go_next(&mut self) -> Option<&PathBuf> {
         if self.images.is_empty() {
             return None;
         }
@@ -71,7 +70,7 @@ impl NavState {
     }
 
     /// Nav to prev image, wrapping around
-    pub fn prev(&mut self) -> Option<&PathBuf> {
+    pub fn go_prev(&mut self) -> Option<&PathBuf> {
         if self.images.is_empty() {
             return None;
         }
@@ -144,12 +143,11 @@ fn scan_dir_sync(dir: &Path, include_hidden: bool) -> Vec<PathBuf> {
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.path())
         .filter(|path| {
-            if !include_hidden {
-                if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
-                    if name.starts_with('.') {
-                        return false;
-                    }
-                }
+            if !include_hidden
+                && let Some(name) = path.file_name().and_then(|name| name.to_str())
+                && name.starts_with('.')
+            {
+                return false;
             }
             is_supported_image(path)
         })

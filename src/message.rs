@@ -39,6 +39,8 @@ pub enum Message {
     SystemThemeChanged,
     /// Config changed
     ConfigChanged,
+    /// Window was resized
+    WindowResized { width: f32, height: f32 },
 }
 
 #[derive(Debug, Clone)]
@@ -91,16 +93,8 @@ pub enum ViewMessage {
     ZoomReset,
     /// Fit image to window
     ZoomFit,
-    /// Set specific zoom level (1.0 = 100%)
-    ZoomSet(f32),
     /// Toggle fullscreen mode
     ToggleFullScreen,
-    /// Pan the image
-    Pan { dx: f32, dy: f32 },
-    /// Hover Previous button
-    HoverPrev(bool),
-    /// Hover Next button
-    HoverNext(bool),
     /// Close Gallery single view modal
     CloseModal,
 }
