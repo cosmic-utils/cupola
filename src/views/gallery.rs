@@ -17,7 +17,7 @@ use cosmic::{
     theme,
     widget::{
         self, Space, button, column, container, flex_row, horizontal_space, icon, image,
-        mouse_area,responsive, row, scrollable, text, tooltip,
+        mouse_area, responsive, row, scrollable, text, tooltip,
     },
 };
 use std::path::PathBuf;

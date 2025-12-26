@@ -39,6 +39,8 @@ pub enum Message {
     SystemThemeChanged,
     /// Config changed
     ConfigChanged,
+    /// Watcher to report directory and file changes
+    WatcherEvent(crate::watcher::WatcherEvent),
     /// Window was resized
     WindowResized {
         width: f32,
@@ -84,6 +86,10 @@ pub enum NavMessage {
     DirectoryScanned {
         images: Vec<PathBuf>,
         target: PathBuf,
+    },
+    /// Refresh the opened directory
+    DirectoryRefreshed {
+        images: Vec<PathBuf>,
     },
     /// Select an image in the gallery
     GallerySelect(usize),

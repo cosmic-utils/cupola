@@ -33,6 +33,7 @@ tracing = "0.1.43"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 rayon = "1.11.0"
 zune-image = "0.4.15"
+notify = "8.2.0"
 
 # Libcosmic
 [dependencies.libcosmic]

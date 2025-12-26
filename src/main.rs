@@ -7,6 +7,7 @@ pub mod menu;
 pub mod message;
 pub mod nav;
 pub mod views;
+pub mod watcher;
 
 use app::ImageViewer;
 use std::path::PathBuf;

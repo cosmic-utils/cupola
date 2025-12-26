@@ -8,6 +8,7 @@ use crate::{
     message::{ContextPage, ImageMessage, Message, NavMessage, ViewMessage},
     nav::{self, EXTENSIONS, NavState},
     views::{GalleryView, ImageViewState},
+    watcher,
 };
 use cosmic::{
     Action, Application, ApplicationExt, Core, Element, Task,
@@ -160,6 +161,29 @@ impl ImageViewer {
 
             Message::Nav(NavMessage::DirectoryScanned { images, target })
         })
+    }
+
+    /// Reload the image list from the current directory
+    fn reload_image_list(&mut self) -> Task<Action<Message>> {
+        let include_hidden = self.config.show_hidden_files;
+
+        // If an image is selected, use its parent directory
+        let dir_option: Option<PathBuf> = if let Some(current) = self.nav.current() {
+            nav::get_image_dir(current)
+        } else if let Some(dir_str) = self.config.last_dir.as_ref() {
+            Some(PathBuf::from(dir_str.clone()))
+        } else {
+            None
+        };
+
+        if let Some(dir) = dir_option {
+            return cosmic::task::future(async move {
+                let images = nav::scan_dir(&dir, include_hidden).await;
+                Message::Nav(NavMessage::DirectoryRefreshed { images })
+            });
+        }
+
+        Task::none()
     }
 
     /// Update window title based on current image
@@ -356,6 +380,37 @@ impl Application for ImageViewer {
                     tasks.push(self.load_current_image());
                     tasks.push(self.preload_images());
                 }
+                NavMessage::DirectoryRefreshed { images } => {
+                    // Preserve whether modal was open before refresh
+                    let was_modal_open = self.gallery_view.modal_index.is_some();
+                    // Keep the current selection, if possible
+                    let current = self.nav.current().cloned();
+
+                    // Replace image list, try to keep selected image
+                    if let Some(ref cur) = current {
+                        self.nav.set_images(images, Some(cur));
+                    } else {
+                        self.nav.set_images(images, None);
+                    }
+
+                    if was_modal_open {
+                        if self.nav.total() > 0 {
+                            // Keep the modal open, but update to the new index
+                            self.gallery_view.modal_index = Some(self.nav.index());
+                            self.update_fit_zoom();
+                            tasks.push(self.load_current_image());
+                        } else {
+                            // No images left, close modal
+                            self.gallery_view.close_modal();
+                            self.cache.clear();
+                        }
+                    } else {
+                        // Backgrond update: refresh thumbnails
+                        tasks.push(self.load_thumbnails());
+                        tasks.push(self.load_current_image());
+                        tasks.push(self.preload_images());
+                    }
+                }
                 NavMessage::GallerySelect(idx) => {
                     self.gallery_view.open_modal(idx);
                     self.nav.go_to(idx);
@@ -457,6 +512,26 @@ impl Application for ImageViewer {
                     }
                 }
             }
+            Message::WatcherEvent(evt) => {
+                match evt {
+                    watcher::WatcherEvent::Created(_)
+                    | watcher::WatcherEvent::Modified(_) => {
+                        tasks.push(self.reload_image_list());
+                        // TODO: Do this more elegantly at some point
+                    }
+                    watcher::WatcherEvent::Removed(path) => {
+                        // If the removed file is the current image, close the modal
+                        if let Some(current) = self.nav.current() && current == &path {
+                            self.gallery_view.close_modal();
+                            // Clear any pending load for the removed image
+                            self.cache.clear_pending(&path);
+                            
+                        }
+                        tasks.push(self.reload_image_list());
+                    }
+                    watcher::WatcherEvent::Error(err) => tracing::warn!("watcher error: {err}"),
+                }
+            }
             Message::WindowResized { width, height } => {
                 self.image_state.set_window_size(width, height);
                 // Update fit_zoom for current image
@@ -494,6 +569,11 @@ impl Application for ImageViewer {
     }
 
     fn subscription(&self) -> cosmic::iced::Subscription<Self::Message> {
+        // Setup the subscription to watch the current directory
+        let watcher_sub =
+            watcher::watch_directory(self.config.last_dir.as_ref().map(|dir| PathBuf::from(dir)))
+                .map(Message::WatcherEvent);
+
         cosmic::iced::Subscription::batch([
             cosmic::iced::keyboard::on_key_press(key_press_handler),
             cosmic::iced::window::events().map(|(_, event)| {
@@ -506,6 +586,7 @@ impl Application for ImageViewer {
                     Message::Cancelled // Use existing no-op message for other window events
                 }
             }),
+            watcher_sub,
         ])
     }
 

@@ -97,4 +97,4 @@ MIT
 ## Known Bugs/Issues
 - ~~Single image modal blocks the use of the rest of the UI.~~
 - While in gallery, no image selected, using the left and right arrow keys opens the single image modal to cycle the images.
-
+- Deleting an image, currently selected or not, while an image is selected doesn't always refresh the directory.
