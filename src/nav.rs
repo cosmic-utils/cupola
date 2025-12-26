@@ -17,7 +17,7 @@ pub const EXTENSIONS: &[&str] = &[
 #[derive(Debug, Clone, Default)]
 pub struct NavState {
     images: Vec<PathBuf>,
-    cur_idx: usize,
+    cur_idx: Option<usize>,
 }
 
 impl NavState {
@@ -27,12 +27,17 @@ impl NavState {
 
     /// Get the current image path, if any
     pub fn current(&self) -> Option<&PathBuf> {
-        self.images.get(self.cur_idx)
+        self.cur_idx.and_then(|idx| self.images.get(idx))
     }
 
     /// Get current index
-    pub fn index(&self) -> usize {
+    pub fn index(&self) -> Option<usize> {
         self.cur_idx
+    }
+
+    /// Check if an image is selected, causing the modal to be open
+    pub fn is_selected(&self) -> bool {
+        self.cur_idx.is_some()
     }
 
     /// Get total number of images
@@ -52,11 +57,23 @@ impl NavState {
     /// Set images list, optionally selecting a specific path
     pub fn set_images(&mut self, images: Vec<PathBuf>, select: Option<&Path>) {
         self.images = images;
-        if let Some(path) = select {
-            self.cur_idx = self.images.iter().position(|pos| pos == path).unwrap_or(0);
+        // Only set selection if explicitly requested and path exists
+        self.cur_idx = select.and_then(|path| self.images.iter().position(|pos| pos == path));
+    }
+
+    /// Select an image
+    pub fn select(&mut self, idx: usize) -> Option<&PathBuf> {
+        if idx < self.images.len() {
+            self.cur_idx = Some(idx);
+            self.current()
         } else {
-            self.cur_idx = 0;
+            None
         }
+    }
+
+    /// Deselect an image
+    pub fn deselect(&mut self) {
+        self.cur_idx = None;
     }
 
     /// Nav to next image, wrapping around
@@ -65,7 +82,8 @@ impl NavState {
             return None;
         }
 
-        self.cur_idx = (self.cur_idx + 1) % self.images.len();
+        let current = self.cur_idx.unwrap_or_default();
+        self.cur_idx = Some((current + 1) % self.images.len());
         self.current()
     }
 
@@ -75,11 +93,13 @@ impl NavState {
             return None;
         }
 
-        self.cur_idx = if self.cur_idx == 0 {
+        let current = self.cur_idx.unwrap_or_default();
+
+        self.cur_idx = Some(if self.cur_idx == Some(0) {
             self.images.len() - 1
         } else {
-            self.cur_idx - 1
-        };
+            current - 1
+        });
 
         self.current()
     }
@@ -90,7 +110,7 @@ impl NavState {
             return None;
         }
 
-        self.cur_idx = 0;
+        self.cur_idx = Some(0);
         self.current()
     }
 
@@ -100,14 +120,14 @@ impl NavState {
             return None;
         }
 
-        self.cur_idx = self.images.len() - 1;
+        self.cur_idx = Some(self.images.len() - 1);
         self.current()
     }
 
     /// Jump to specific index
     pub fn go_to(&mut self, idx: usize) -> Option<&PathBuf> {
         if idx < self.images.len() {
-            self.cur_idx = idx;
+            self.cur_idx = Some(idx);
             self.current()
         } else {
             None

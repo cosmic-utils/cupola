@@ -322,36 +322,37 @@ impl Application for ImageViewer {
             Message::Nav(nav_msg) => match nav_msg {
                 NavMessage::Next => {
                     self.nav.go_next();
-                    self.gallery_view.modal_index = Some(self.nav.index());
                     self.image_state.zoom_fit(); // Reset to fit mode for new image
                     self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::Prev => {
                     self.nav.go_prev();
-                    self.gallery_view.modal_index = Some(self.nav.index());
                     self.image_state.zoom_fit(); // Reset to fit mode for new image
                     self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::First => {
                     self.nav.first();
-                    self.gallery_view.modal_index = Some(self.nav.index());
                     self.image_state.zoom_fit(); // Reset to fit mode for new image
                     self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::Last => {
                     self.nav.last();
-                    self.gallery_view.modal_index = Some(self.nav.index());
                     self.image_state.zoom_fit(); // Reset to fit mode for new image
                     self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::GoTo(idx) => {
                     self.nav.go_to(idx);
-                    self.gallery_view.modal_index = Some(self.nav.index());
                     self.image_state.zoom_fit(); // Reset to fit mode for new image
+                    self.update_fit_zoom();
+                    tasks.push(self.load_current_image());
+                }
+                NavMessage::GallerySelect(idx) => {
+                    self.nav.select(idx);
+                    self.image_state.zoom_fit();
                     self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
@@ -373,7 +374,7 @@ impl Application for ImageViewer {
 
                     // Open modal only if a specific image file was requested
                     if target.is_file() && self.nav.total() > 0 {
-                        self.gallery_view.open_modal(self.nav.index());
+                        self.nav.select(self.nav.index().unwrap_or(0));
                     }
 
                     tasks.push(self.load_thumbnails());
@@ -381,42 +382,45 @@ impl Application for ImageViewer {
                     tasks.push(self.preload_images());
                 }
                 NavMessage::DirectoryRefreshed { images } => {
-                    // Preserve whether modal was open before refresh
-                    let was_modal_open = self.gallery_view.modal_index.is_some();
-                    // Keep the current selection, if possible
-                    let current = self.nav.current().cloned();
+                    let was_selected = self.nav.is_selected();
+                    let prev_path = self.nav.current().cloned();
+                    let prev_idx = self.nav.index().unwrap_or(0);
 
-                    // Replace image list, try to keep selected image
-                    if let Some(ref cur) = current {
-                        self.nav.set_images(images, Some(cur));
-                    } else {
-                        self.nav.set_images(images, None);
-                    }
+                    // Update image list; clearing the selection
+                    self.nav.set_images(images.clone(), None);
 
-                    if was_modal_open {
+                    if was_selected {
                         if self.nav.total() > 0 {
-                            // Keep the modal open, but update to the new index
-                            self.gallery_view.modal_index = Some(self.nav.index());
+                            // Try to restore selection to same image or nearest neighbor
+                            let new_idx = if let Some(ref path) = prev_path {
+                                // Find the image in the new list
+                                images.iter().position(|pos| pos == path)
+                            } else {
+                                None
+                            };
+
+                            let idx = new_idx.unwrap_or_else(|| {
+                                // Image was deleted, use prev_idx clamped to valid range
+                                prev_idx.min(self.nav.total() - 1)
+                            });
+
+                            self.nav.select(idx);
+
+                            // Reset zoom if showing different image
+                            if new_idx.is_none() {
+                                self.image_state.zoom_fit();
+                            }
+
                             self.update_fit_zoom();
                             tasks.push(self.load_current_image());
-                        } else {
-                            // No images left, close modal
-                            self.gallery_view.close_modal();
-                            self.cache.clear();
                         }
+                        // If no images are left, selection stays cleared
+                        // and the modal is closed.
                     } else {
-                        // Backgrond update: refresh thumbnails
+                        // Background update: refresh thumbnails
                         tasks.push(self.load_thumbnails());
-                        tasks.push(self.load_current_image());
                         tasks.push(self.preload_images());
                     }
-                }
-                NavMessage::GallerySelect(idx) => {
-                    self.gallery_view.open_modal(idx);
-                    self.nav.go_to(idx);
-                    self.image_state.zoom_fit(); // Reset to fit mode for new image
-                    self.update_fit_zoom();
-                    tasks.push(self.load_current_image());
                 }
             },
             Message::View(view_msg) => match view_msg {
@@ -431,7 +435,7 @@ impl Application for ImageViewer {
                 }
                 ViewMessage::CloseModal => {
                     // Close the modal
-                    self.gallery_view.close_modal();
+                    self.nav.deselect();
                     // Reset zoom state
                     if self.image_state.zoom_level != 1.0 {
                         self.image_state.zoom_level = 1.0;
@@ -513,20 +517,32 @@ impl Application for ImageViewer {
                 }
             }
             Message::WatcherEvent(evt) => {
+                tracing::info!("WatcherEvent recieved: {evt:?}");
                 match evt {
-                    watcher::WatcherEvent::Created(_)
-                    | watcher::WatcherEvent::Modified(_) => {
+                    watcher::WatcherEvent::Created(_) => {
                         tasks.push(self.reload_image_list());
                         // TODO: Do this more elegantly at some point
                     }
-                    watcher::WatcherEvent::Removed(path) => {
-                        // If the removed file is the current image, close the modal
-                        if let Some(current) = self.nav.current() && current == &path {
-                            self.gallery_view.close_modal();
-                            // Clear any pending load for the removed image
+                    watcher::WatcherEvent::Modified(path) => {
+                        // On some systems, external deletion reports as Modified
+                        if !path.exists() {
                             self.cache.clear_pending(&path);
-                            
+                            if self.nav.current() == Some(&path) {
+                                self.nav.deselect();
+                            }
+
+                            tasks.push(self.reload_image_list());
                         }
+                    }
+                    watcher::WatcherEvent::Removed(path) => {
+                        self.cache.clear_pending(&path);
+                        // If the deleted image is the one in the modal, deselect it
+                        // so reload_image_list falls back to last_dir
+                        if self.nav.current() == Some(&path) {
+                            self.nav.deselect();
+                        }
+
+                        // Let DirectoryRefresh handle modal transition
                         tasks.push(self.reload_image_list());
                     }
                     watcher::WatcherEvent::Error(err) => tracing::warn!("watcher error: {err}"),

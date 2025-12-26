@@ -29,8 +29,6 @@ pub struct GalleryView {
     pub selected: Vec<usize>,
     /// Number of cols in the grid
     pub cols: usize,
-    /// Currently open modal image index
-    pub modal_index: Option<usize>,
 }
 
 impl GalleryView {
@@ -38,23 +36,7 @@ impl GalleryView {
         Self {
             selected: Vec::new(),
             cols: 4,
-            modal_index: None,
         }
-    }
-
-    /// Open modal for an image selection
-    pub fn open_modal(&mut self, index: usize) {
-        self.modal_index = Some(index);
-    }
-
-    /// Close an open modal
-    pub fn close_modal(&mut self) {
-        self.modal_index = None;
-    }
-
-    /// Check if an image selected modal is open
-    pub fn is_modal_open(&self) -> bool {
-        self.modal_index.is_some()
     }
 
     /// Toggle selection of an image
@@ -346,7 +328,7 @@ impl GalleryView {
             .into();
 
         // If modal is open wrap with popover
-        if let Some(idx) = self.modal_index
+        if let Some(idx) = nav.index()
             && let Some(path) = images.get(idx)
             && let Some(cached) = cache.get_full(path)
         {
@@ -357,7 +339,7 @@ impl GalleryView {
                 container(Space::new(Length::Fill, Length::Fill))
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .class(theme::Container::Card),
+                    .class(theme::Container::Transparent),
             )
             .on_press(Message::View(ViewMessage::CloseModal));
 
