@@ -1,84 +1,67 @@
 use crate::{fl, key_binds::MenuAction, message::Message};
 use cosmic::{
-    Element,
-    iced::Length,
-    widget::menu::{self, ItemHeight, ItemWidth, MenuBar, Tree},
+    Core, Element,
+    widget::{
+        menu::{self, ItemHeight, ItemWidth, KeyBind},
+        responsive_menu_bar,
+    },
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 
-pub fn menu_bar(key_binds: &HashMap<menu::KeyBind, MenuAction>) -> MenuBar<Message> {
-    MenuBar::new(vec![
-        file_menu(key_binds),
-        view_menu(key_binds),
-        nav_menu(key_binds),
-        help_menu(key_binds),
-    ])
-    .item_height(ItemHeight::Dynamic(40))
-    .item_width(ItemWidth::Uniform(260))
-    .width(Length::Fill)
-    .spacing(4.)
-}
+static MENU_ID: LazyLock<cosmic::widget::Id> =
+    LazyLock::new(|| cosmic::widget::Id::new("responsive-menu"));
 
-fn file_menu(key_binds: &HashMap<menu::KeyBind, MenuAction>) -> Tree<Message> {
-    Tree::with_children(
-        Element::from(menu::root(fl!("menu-file"))),
-        menu::items(
+pub fn menu_bar<'a>(core: &Core, key_binds: &HashMap<KeyBind, MenuAction>) -> Element<'a, Message> {
+    responsive_menu_bar()
+        .item_height(ItemHeight::Dynamic(40))
+        .item_width(ItemWidth::Uniform(260))
+        .spacing(4.)
+        .into_element(
+            core,
             key_binds,
+            MENU_ID.clone(),
+            Message::Surface,
             vec![
-                menu::Item::Button(fl!("menu-open"), None, MenuAction::Open),
-                menu::Item::Button(fl!("menu-open-folder"), None, MenuAction::OpenFolder),
-                menu::Item::Divider,
-                menu::Item::Button(fl!("menu-close"), None, MenuAction::Close),
-                menu::Item::Divider,
-                menu::Item::Button(fl!("menu-quit"), None, MenuAction::Quit),
+                (
+                    fl!("menu-file"),
+                    vec![
+                        menu::Item::Button(fl!("menu-open"), None, MenuAction::Open),
+                        menu::Item::Button(fl!("menu-open-folder"), None, MenuAction::OpenFolder),
+                        menu::Item::Divider,
+                        menu::Item::Button(fl!("menu-settings"), None, MenuAction::Settings),
+                        menu::Item::Divider,
+                        menu::Item::Button(fl!("menu-quit"), None, MenuAction::Quit),
+                    ],
+                ),
+                (
+                    fl!("menu-view"),
+                    vec![
+                        menu::Item::Button(fl!("menu-zoom-in"), None, MenuAction::ZoomIn),
+                        menu::Item::Button(fl!("menu-zoom-out"), None, MenuAction::ZoomOut),
+                        menu::Item::Button(fl!("menu-zoom-reset"), None, MenuAction::ZoomReset),
+                        menu::Item::Button(fl!("menu-zoom-fit"), None, MenuAction::ZoomFit),
+                        menu::Item::Divider,
+                        menu::Item::Button(fl!("menu-fullscreen"), None, MenuAction::Fullscreen),
+                    ],
+                ),
+                (
+                    fl!("menu-nav"),
+                    vec![
+                        menu::Item::Button(fl!("menu-next"), None, MenuAction::Next),
+                        menu::Item::Button(fl!("menu-prev"), None, MenuAction::Prev),
+                        menu::Item::Divider,
+                        menu::Item::Button(fl!("menu-first"), None, MenuAction::First),
+                        menu::Item::Button(fl!("menu-last"), None, MenuAction::Last),
+                    ],
+                ),
+                (
+                    fl!("menu-help"),
+                    vec![menu::Item::Button(
+                        fl!("menu-about"),
+                        None,
+                        MenuAction::About,
+                    )],
+                ),
             ],
-        ),
-    )
-}
-
-fn view_menu(key_binds: &HashMap<menu::KeyBind, MenuAction>) -> Tree<Message> {
-    Tree::with_children(
-        Element::from(menu::root(fl!("menu-view"))),
-        menu::items(
-            key_binds,
-            vec![
-                menu::Item::Button(fl!("menu-zoom-in"), None, MenuAction::ZoomIn),
-                menu::Item::Button(fl!("menu-zoom-out"), None, MenuAction::ZoomOut),
-                menu::Item::Button(fl!("menu-zoom-reset"), None, MenuAction::ZoomReset),
-                menu::Item::Button(fl!("menu-zoom-fit"), None, MenuAction::ZoomFit),
-                menu::Item::Divider,
-                menu::Item::Button(fl!("menu-fullscreen"), None, MenuAction::Fullscreen),
-            ],
-        ),
-    )
-}
-
-fn nav_menu(key_binds: &HashMap<menu::KeyBind, MenuAction>) -> Tree<Message> {
-    Tree::with_children(
-        Element::from(menu::root(fl!("menu-nav"))),
-        menu::items(
-            key_binds,
-            vec![
-                menu::Item::Button(fl!("menu-next"), None, MenuAction::Next),
-                menu::Item::Button(fl!("menu-prev"), None, MenuAction::Prev),
-                menu::Item::Divider,
-                menu::Item::Button(fl!("menu-first"), None, MenuAction::First),
-                menu::Item::Button(fl!("menu-last"), None, MenuAction::Last),
-            ],
-        ),
-    )
-}
-
-fn help_menu(key_binds: &HashMap<menu::KeyBind, MenuAction>) -> Tree<Message> {
-    Tree::with_children(
-        Element::from(menu::root(fl!("menu-help"))),
-        menu::items(
-            key_binds,
-            vec![menu::Item::Button(
-                fl!("menu-about"),
-                None,
-                MenuAction::About,
-            )],
-        ),
-    )
+        )
 }

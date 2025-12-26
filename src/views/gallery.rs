@@ -230,8 +230,11 @@ impl GalleryView {
                     .padding(spacing.space_xs),
             )
             .push(if fit_to_window {
-                container(text::body(format!("Fit ({}%)", (fit_zoom_display * 100.0) as u32)))
-                    .padding(spacing.space_xs)
+                container(text::body(format!(
+                    "Fit ({}%)",
+                    (fit_zoom_display * 100.0) as u32
+                )))
+                .padding(spacing.space_xs)
             } else {
                 container(
                     button::text(format!("{}%", (zoom_level * 100.0) as u32))

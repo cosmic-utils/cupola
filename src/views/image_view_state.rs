@@ -1,11 +1,7 @@
 //! Zoom/pan state for the modal image view
 
 use crate::message::Message;
-use cosmic::{
-    Task,
-    iced_widget::scrollable,
-    widget::Id,
-};
+use cosmic::{Task, iced_widget::scrollable, widget::Id};
 
 /// ID for the modal's scrollable widget
 const MODAL_SCROLL_ID: &str = "modal-image-scroll";
@@ -102,7 +98,8 @@ impl ImageViewState {
         let container_pad = 16.0;
 
         let available_width = self.window_width - modal_pad_x - nav_btn_width - container_pad;
-        let available_height = self.window_height - modal_pad_y - header_height - footer_height - container_pad;
+        let available_height =
+            self.window_height - modal_pad_y - header_height - footer_height - container_pad;
 
         if available_width <= 0.0 || available_height <= 0.0 {
             return; // Window too small

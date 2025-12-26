@@ -140,7 +140,8 @@ impl ImageViewer {
         if let Some(path) = self.nav.current()
             && let Some(cached) = self.cache.get_full(path)
         {
-            self.image_state.calculate_fit_zoom(cached.width, cached.height);
+            self.image_state
+                .calculate_fit_zoom(cached.width, cached.height);
         }
     }
 
@@ -238,7 +239,7 @@ impl Application for ImageViewer {
     }
 
     fn header_start(&self) -> Vec<Element<'_, Self::Message>> {
-        vec![crate::menu::menu_bar(&self.key_binds).into()]
+        vec![crate::menu::menu_bar(&self.core, &self.key_binds).into()]
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
@@ -364,12 +365,8 @@ impl Application for ImageViewer {
                 }
             },
             Message::View(view_msg) => match view_msg {
-                ViewMessage::ZoomIn => {
-                    tasks.push(self.image_state.zoom_in().map(Action::from))
-                }
-                ViewMessage::ZoomOut => {
-                    tasks.push(self.image_state.zoom_out().map(Action::from))
-                }
+                ViewMessage::ZoomIn => tasks.push(self.image_state.zoom_in().map(Action::from)),
+                ViewMessage::ZoomOut => tasks.push(self.image_state.zoom_out().map(Action::from)),
                 ViewMessage::ZoomReset => {
                     tasks.push(self.image_state.zoom_reset().map(Action::from))
                 }
@@ -388,6 +385,9 @@ impl Application for ImageViewer {
                 }
             },
             Message::KeyBind(action) => tasks.push(self.update(action.message())),
+            Message::Surface(action) => {
+                return cosmic::task::message(Action::Cosmic(cosmic::app::Action::Surface(action)));
+            }
             Message::ToggleContextPage(page) => {
                 if self.context_page == Some(page) {
                     self.context_page = None;
@@ -463,7 +463,8 @@ impl Application for ImageViewer {
                 if let Some(path) = self.nav.current()
                     && let Some(cached) = self.cache.get_full(path)
                 {
-                    self.image_state.calculate_fit_zoom(cached.width, cached.height);
+                    self.image_state
+                        .calculate_fit_zoom(cached.width, cached.height);
                 }
             }
             Message::Quit => {

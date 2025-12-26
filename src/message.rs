@@ -1,4 +1,4 @@
-use cosmic::widget::image::Handle;
+use cosmic::{iced::window::Id, widget::image::Handle};
 use std::{path::PathBuf, sync::Arc};
 
 /// Menu action type alias (re-exported from key_binds module)
@@ -40,9 +40,13 @@ pub enum Message {
     /// Config changed
     ConfigChanged,
     /// Window was resized
-    WindowResized { width: f32, height: f32 },
+    WindowResized {
+        width: f32,
+        height: f32,
+    },
     /// Quit the application
     Quit,
+    Surface(cosmic::surface::Action),
 }
 
 #[derive(Debug, Clone)]

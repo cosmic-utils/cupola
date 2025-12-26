@@ -7,7 +7,7 @@ app-description = An image viewer made for COSMIC, but can be used anywhere.
 menu-file = File
 menu-open = Open
 menu-open-folder = Open Folder
-menu-close = Close
+menu-settings = Settings
 menu-quit = Quit
 
 # Menu - View

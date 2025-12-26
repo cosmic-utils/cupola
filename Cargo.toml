@@ -38,11 +38,13 @@ zune-image = "0.4.15"
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
 features = [
+  "autosize",
   "tokio",
   "winit",
   "wgpu",
   "a11y",
   "rfd",
+  "surface-message",
 ]
 
 [features]
