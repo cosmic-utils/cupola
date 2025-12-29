@@ -15,7 +15,10 @@ use cosmic::{
     app::context_drawer,
     cosmic_config::{Config, CosmicConfigEntry},
     dialog::file_chooser::{self, FileFilter, open::Dialog},
-    iced::keyboard::{Key, Modifiers},
+    iced::{
+        keyboard::{Key, Modifiers},
+        window,
+    },
     task::future,
     theme,
     widget::{
@@ -38,6 +41,7 @@ pub struct ImageViewer {
     gallery_view: GalleryView,
     context_page: Option<ContextPage>,
     is_loading: bool,
+    is_fullscreen: bool,
 }
 
 impl ImageViewer {
@@ -243,6 +247,7 @@ impl Application for ImageViewer {
             gallery_view: GalleryView::new(),
             context_page: None,
             is_loading: false,
+            is_fullscreen: false,
         };
 
         let startup_path = if let Some(path) = flags {
@@ -469,7 +474,19 @@ impl Application for ImageViewer {
                 }
                 ViewMessage::ZoomFit => self.image_state.zoom_fit(),
                 ViewMessage::ToggleFullScreen => {
-                    tracing::info!("Toggle Fullscreen clicked!");
+                    self.is_fullscreen = !self.is_fullscreen;
+
+                    let mode = if self.is_fullscreen {
+                        window::Mode::Fullscreen
+                    } else {
+                        window::Mode::Windowed
+                    };
+
+                    let window_id = self
+                        .core
+                        .main_window_id()
+                        .expect("Main window ID should be present");
+                    return window::change_mode::<Message>(window_id, mode).map(Action::from);
                 }
                 ViewMessage::CloseModal => {
                     // Close the modal

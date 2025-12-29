@@ -2,7 +2,7 @@ use cosmic::cosmic_config::{self, Config, ConfigGet, ConfigSet, CosmicConfigEntr
 use serde::{Deserialize, Serialize};
 
 pub const CONFIG_VERSION: u64 = 1;
-const APP_ID: &str = "org.codeberg.bhh32.CosmicImageViewer";
+const APP_ID: &str = "org.codeberg.bhh32.CosmicViewer";
 
 /// Thumbnail size presets
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
