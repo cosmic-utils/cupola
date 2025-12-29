@@ -94,7 +94,6 @@ cargo clippy            # Run linter
 The goal is to build a fast, private image manager that helps organize photo libraries through tags, locations, and smart detection without shipping photos to someone else's cloud. All ML-based features run locally using embedded models. No cloud AI, no third-party LLMs, nothing leaves your computer.
 
 ### In Progress
-- [ ] Settings page UI
 - [ ] Theme switching
 
 ### Core Features
@@ -154,6 +153,8 @@ The goal is to build a fast, private image manager that helps organize photo lib
 - [x] Thumbnail caching with configurable sizes
 - [x] Modal single-image view with navigation
 - [x] Fullscreen mode
+- [x] Settings page UI
+- [x] Slideshow in single view modal (not full implementation)
 
 ## Contributing
 Contributions are welcome! Please feel free to submit issues and pull requests.
@@ -162,6 +163,7 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 MIT
 
 ## Known Bugs/Issues
+- Slideshow skips the first image due to starting before single image modal can popup.
 - ~~Single image modal blocks the use of the rest of the UI.~~
 - ~~While in gallery, no image selected, using the left and right arrow keys opens the single image modal to cycle the images.~~
-- ~~Deleting an image, currently selected or not, while an image is selected doesn't always refresh the directory.~~
+- ~~Deleting an image externally, currently selected or not, while any image is selected doesn't always refresh the directory.~~

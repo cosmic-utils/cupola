@@ -505,6 +505,11 @@ impl Application for ImageViewer {
                         self.image_state.zoom_level = 1.0;
                         self.image_state.fit_to_window = true;
                     }
+
+                    // If a slideshow was playing, stop it
+                    if self.is_slideshow_active {
+                        self.is_slideshow_active = false;
+                    }
                 }
                 ViewMessage::FocusUp => {
                     let total = self.nav.total();
