@@ -12,7 +12,11 @@ static MENU_ID: LazyLock<cosmic::widget::Id> =
     LazyLock::new(|| cosmic::widget::Id::new("responsive-menu"));
 
 /// Returns a ResponsiveMenuBar as an Element
-pub fn menu_bar<'a>(core: &Core, key_binds: &HashMap<KeyBind, MenuAction>) -> Element<'a, Message> {
+pub fn menu_bar<'a>(
+    core: &Core,
+    key_binds: &HashMap<KeyBind, MenuAction>,
+    is_slideshow_active: bool,
+) -> Element<'a, Message> {
     responsive_menu_bar()
         .item_height(ItemHeight::Dynamic(40))
         .item_width(ItemWidth::Uniform(260))
@@ -43,6 +47,15 @@ pub fn menu_bar<'a>(core: &Core, key_binds: &HashMap<KeyBind, MenuAction>) -> El
                         menu::Item::Button(fl!("menu-zoom-fit"), None, MenuAction::ZoomFit),
                         menu::Item::Divider,
                         menu::Item::Button(fl!("menu-fullscreen"), None, MenuAction::Fullscreen),
+                        menu::Item::Button(
+                            if is_slideshow_active {
+                                fl!("menu-slideshow-stop")
+                            } else {
+                                fl!("menu-slideshow-start")
+                            },
+                            None,
+                            MenuAction::ToggleSlideshow,
+                        ),
                     ],
                 ),
                 (

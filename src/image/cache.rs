@@ -44,6 +44,16 @@ impl ImageCache {
         Self::new(20, 100)
     }
 
+    /// Resize the full image cache capacity
+    pub fn resize(&self, new_capacity: usize) {
+        if let Ok(mut cache) = self.full_images.lock() {
+            cache.resize(
+                NonZeroUsize::new(new_capacity.max(1))
+                    .expect("New cache capacity should be implemented"),
+            )
+        }
+    }
+
     /// Get a full-resolution cached image
     pub fn get_full(&self, path: &PathBuf) -> Option<CachedImage> {
         self.full_images.lock().ok()?.get(path).cloned()
@@ -89,6 +99,13 @@ impl ImageCache {
     pub fn clear_pending(&self, path: &PathBuf) {
         if let Ok(mut set) = self.pending.lock() {
             set.remove(path);
+        }
+    }
+
+    /// Clear the thumbnail cache
+    pub fn clear_thumbnails(&self) {
+        if let Ok(mut cache) = self.thumbnails.lock() {
+            cache.clear();
         }
     }
 

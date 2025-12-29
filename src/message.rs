@@ -21,6 +21,8 @@ pub enum Message {
     Nav(NavMessage),
     /// View state changes (zoom, pan, mode)
     View(ViewMessage),
+    /// Settings changes
+    Settings(SettingsMessage),
     /// Keyboard binding action
     KeyBind(MenuAction),
     /// Toggle context drawer page
@@ -46,6 +48,8 @@ pub enum Message {
         width: f32,
         height: f32,
     },
+    /// Slideshow timer tick
+    SlideshowTick,
     /// Quit the application
     Quit,
     Surface(cosmic::surface::Action),
@@ -113,4 +117,30 @@ pub enum ViewMessage {
     FocusDown,
     /// Gallery - Open the modal for the currently focused thumbnail
     SelectFocused,
+    /// Start slideshow
+    StartSlideshow,
+    /// Stop slideshow
+    StopSlideshow,
+    /// Toggle slideshow on/off
+    ToggleSlideshow,
+}
+
+#[derive(Debug, Clone)]
+pub enum SettingsMessage {
+    /// Change default zoom level
+    DefaultZoom(f32),
+    /// Toggle fit to window
+    FitToWindow(bool),
+    /// Toggle smooth scaling
+    SmoothScaling(bool),
+    /// Change thumbnail size
+    ThumbnailSize(crate::config::ThumbnailSize),
+    /// Toggle show hidden files
+    ShowHiddenFiles(bool),
+    /// Change slideshow interval
+    SlideshowInterval(u32),
+    /// Change cache size
+    CacheSize(usize),
+    /// Toggle remember last directory
+    RememberLastDir(bool),
 }

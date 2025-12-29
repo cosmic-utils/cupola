@@ -17,8 +17,9 @@ menu-zoom-out = Zoom Out
 menu-zoom-reset = Reset Zoom
 menu-zoom-fit = Fit to Window
 menu-fullscreen = Fullscreen
+menu-slideshow-start = Start Slideshow
+menu-slideshow-stop = Stop Slideshow
 menu-gallery = Gallery View
-menu-single = Single Image View
 
 # Menu - Navigate
 menu-nav = Navigate
@@ -30,6 +31,31 @@ menu-last = Last Image
 # Menu - Help
 menu-help = Help
 menu-about = About
+
+# Settings
+settings-title = Settings
+settings-appearance = Appearance
+settings-theme = Theme
+settings-theme-system = System
+settings-theme-light = Light
+settings-theme-dark = Dark
+settings-view = View Settings
+settings-default-zoom = Default Zoom Level
+settings-fit-to-window = Fit Images to Window
+settings-smooth-scaling = Smooth Image Scaling
+settings-gallery = Gallery Settings
+settings-thumbnail-size = Thumbnail Size
+settings-thumbnail-small = Small (64px)
+settings-thumbnail-medium = Medium (128px)
+settings-thumbnail-large = Large (192px)
+settings-thumbnail-xlarge = Extra Large (256px)
+settings-show-hidden = Show Hidden Files
+settings-slideshow = Slideshow Settings
+settings-slideshow-interval = Slideshow Interval (seconds)
+settings-performance = Performance
+settings-cache-size = Image Cache Size
+settings-directory = Directory Settings
+settings-remember-dir = Remember Last Directory
 
 # Status
 status-loading = Loading...

@@ -32,6 +32,7 @@ pub enum MenuAction {
     FocusUp,
     FocusDown,
     SelectFocused,
+    ToggleSlideshow,
 }
 
 impl MenuAction {
@@ -57,6 +58,7 @@ impl MenuAction {
             MenuAction::FocusUp => Message::View(ViewMessage::FocusUp),
             MenuAction::FocusDown => Message::View(ViewMessage::FocusDown),
             MenuAction::SelectFocused => Message::View(ViewMessage::SelectFocused),
+            MenuAction::ToggleSlideshow => Message::View(ViewMessage::ToggleSlideshow),
         }
     }
 }
@@ -209,6 +211,14 @@ pub fn init_key_binds() -> HashMap<KeyBind, MenuAction> {
             key: Key::Named(Named::Escape),
         },
         MenuAction::CloseModal,
+    );
+
+    binds.insert(
+        KeyBind {
+            modifiers: vec![],
+            key: Key::Named(Named::F5),
+        },
+        MenuAction::ToggleSlideshow,
     );
 
     // Info

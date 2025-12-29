@@ -1,11 +1,11 @@
 //! Main app state
 
 use crate::{
-    config::ViewerConfig,
+    config::{ThumbnailSize, ViewerConfig},
     fl,
     image::{self, CachedImage, ImageCache},
     key_binds::{self, MenuAction},
-    message::{ContextPage, ImageMessage, Message, NavMessage, ViewMessage},
+    message::{ContextPage, ImageMessage, Message, NavMessage, SettingsMessage, ViewMessage},
     nav::{self, EXTENSIONS, NavState},
     views::{GalleryView, ImageViewState},
     watcher,
@@ -19,15 +19,16 @@ use cosmic::{
         keyboard::{Key, Modifiers},
         window,
     },
+    iced_widget::toggler,
     task::future,
     theme,
     widget::{
         Id, button, column,
         menu::key_bind::{KeyBind, Modifier},
-        text,
+        radio, settings, slider, spin_button, text,
     },
 };
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 /// Main app state
 pub struct ImageViewer {
@@ -42,6 +43,7 @@ pub struct ImageViewer {
     context_page: Option<ContextPage>,
     is_loading: bool,
     is_fullscreen: bool,
+    is_slideshow_active: bool,
 }
 
 impl ImageViewer {
@@ -248,6 +250,7 @@ impl Application for ImageViewer {
             context_page: None,
             is_loading: false,
             is_fullscreen: false,
+            is_slideshow_active: false,
         };
 
         let startup_path = if let Some(path) = flags {
@@ -269,7 +272,7 @@ impl Application for ImageViewer {
     }
 
     fn header_start(&self) -> Vec<Element<'_, Self::Message>> {
-        vec![crate::menu::menu_bar(&self.core, &self.key_binds).into()]
+        vec![crate::menu::menu_bar(&self.core, &self.key_binds, self.is_slideshow_active).into()]
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
@@ -327,6 +330,7 @@ impl Application for ImageViewer {
             },
             Message::Nav(nav_msg) => match nav_msg {
                 NavMessage::Next => {
+                    self.is_slideshow_active = false;
                     if self.nav.is_selected() {
                         // Modal open: navigate images
                         self.nav.go_next();
@@ -352,6 +356,7 @@ impl Application for ImageViewer {
                     }
                 }
                 NavMessage::Prev => {
+                    self.is_slideshow_active = false;
                     if self.nav.is_selected() {
                         self.nav.go_prev();
                         self.image_state.zoom_fit(); // Reset to fit mode for new image
@@ -376,24 +381,28 @@ impl Application for ImageViewer {
                     }
                 }
                 NavMessage::First => {
+                    self.is_slideshow_active = false;
                     self.nav.first();
                     self.image_state.zoom_fit(); // Reset to fit mode for new image
                     self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::Last => {
+                    self.is_slideshow_active = false;
                     self.nav.last();
                     self.image_state.zoom_fit(); // Reset to fit mode for new image
                     self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::GoTo(idx) => {
+                    self.is_slideshow_active = false;
                     self.nav.go_to(idx);
                     self.image_state.zoom_fit(); // Reset to fit mode for new image
                     self.update_fit_zoom();
                     tasks.push(self.load_current_image());
                 }
                 NavMessage::GallerySelect(idx) => {
+                    self.is_slideshow_active = false;
                     self.nav.select(idx);
                     self.image_state.zoom_fit();
                     self.update_fit_zoom();
@@ -543,7 +552,55 @@ impl Application for ImageViewer {
                         tasks.push(self.load_current_image());
                     }
                 }
+                ViewMessage::StartSlideshow => {
+                    if self.nav.total() > 0 {
+                        self.is_slideshow_active = true;
+                        if !self.nav.is_selected()
+                            && let Some(path) = self.nav.go_to(0).cloned()
+                        {
+                            self.update_fit_zoom();
+                            tasks.push(self.load_image(path.clone()));
+                        }
+                    }
+                }
+                ViewMessage::StopSlideshow => self.is_slideshow_active = false,
+                ViewMessage::ToggleSlideshow => {
+                    self.is_slideshow_active = !self.is_slideshow_active
+                }
             },
+            Message::Settings(msg) => {
+                match msg {
+                    SettingsMessage::DefaultZoom(zoom) => self.config.default_zoom = zoom,
+                    SettingsMessage::FitToWindow(fit) => self.config.fit_to_window = fit,
+                    SettingsMessage::SmoothScaling(smooth) => self.config.smooth_scaling = smooth,
+                    SettingsMessage::ThumbnailSize(size) => {
+                        self.config.thumbnail_size = size;
+                        // Clear thumbnail cache and for regeneration
+                        self.cache.clear_thumbnails();
+                        tasks.push(self.load_thumbnails());
+                    }
+                    SettingsMessage::ShowHiddenFiles(show) => {
+                        self.config.show_hidden_files = show;
+                        // Reload the current directory with the new setting
+                        tasks.push(self.reload_image_list());
+                    }
+                    SettingsMessage::SlideshowInterval(interval) => {
+                        self.config.slideshow_interval = interval
+                    }
+                    SettingsMessage::CacheSize(size) => {
+                        self.config.cache_size = size;
+                        self.cache.resize(size);
+                    }
+                    SettingsMessage::RememberLastDir(remem) => {
+                        self.config.remember_last_dir = remem
+                    }
+                }
+
+                // Save config changes
+                if let Some(ref handler) = self.config_handler {
+                    let _ = self.config.write_entry(handler);
+                }
+            }
             Message::KeyBind(action) => tasks.push(self.update(action.message())),
             Message::Surface(action) => {
                 return cosmic::task::message(Action::Cosmic(cosmic::app::Action::Surface(action)));
@@ -670,6 +727,15 @@ impl Application for ImageViewer {
                         .calculate_fit_zoom(cached.width, cached.height);
                 }
             }
+            Message::SlideshowTick => {
+                if self.is_slideshow_active && !self.nav.is_empty() {
+                    if let Some(path) = self.nav.go_next().cloned() {
+                        self.update_fit_zoom();
+                        tasks.push(self.load_image(path.clone()));
+                        tasks.push(self.preload_images());
+                    }
+                }
+            }
             Message::Quit => {
                 std::process::exit(0);
             }
@@ -702,6 +768,14 @@ impl Application for ImageViewer {
             watcher::watch_directory(self.config.last_dir.as_ref().map(|dir| PathBuf::from(dir)))
                 .map(Message::WatcherEvent);
 
+        // Slideshow timer
+        let slideshow_sub = if self.is_slideshow_active {
+            cosmic::iced::time::every(Duration::from_secs(self.config.slideshow_interval as u64))
+                .map(|_| Message::SlideshowTick)
+        } else {
+            cosmic::iced::Subscription::none()
+        };
+
         cosmic::iced::Subscription::batch([
             cosmic::iced::keyboard::on_key_press(key_press_handler),
             cosmic::iced::window::events().map(|(_, event)| {
@@ -715,6 +789,7 @@ impl Application for ImageViewer {
                 }
             }),
             watcher_sub,
+            slideshow_sub,
         ])
     }
 
@@ -738,11 +813,120 @@ impl ImageViewer {
     }
 
     fn settings_page(&self) -> Element<'_, Message> {
-        column()
-            .push(text::title3("Settings"))
-            .push(text::body("Settings page coming soon"))
-            .spacing(cosmic::theme::active().cosmic().spacing.space_s)
-            .into()
+        let spacing = cosmic::theme::active().cosmic().spacing;
+
+        settings::view_column(vec![
+            // Appearance section
+            settings::section()
+                .title(fl!("settings-appearance"))
+                .add(settings::item(
+                    fl!("settings-theme"),
+                    text::body(fl!("settings-theme-system")),
+                ))
+                .into(),
+            // View settings section
+            settings::section()
+                .title(fl!("settings-view"))
+                .add(settings::item(
+                    fl!("settings-default-zoom"),
+                    slider(0.1..=5.0, self.config.default_zoom, |zoom| {
+                        Message::Settings(SettingsMessage::DefaultZoom(zoom))
+                    })
+                    .step(0.1),
+                ))
+                .add(settings::item(
+                    fl!("settings-fit-to-window"),
+                    toggler(self.config.fit_to_window)
+                        .on_toggle(|fit| Message::Settings(SettingsMessage::FitToWindow(fit))),
+                ))
+                .add(settings::item(
+                    fl!("settings-smooth-scaling"),
+                    toggler(self.config.smooth_scaling).on_toggle(|smooth| {
+                        Message::Settings(SettingsMessage::SmoothScaling(smooth))
+                    }),
+                ))
+                .into(),
+            // Gallery settings section
+            settings::section()
+                .title(fl!("settings-gallery"))
+                .add(settings::item(
+                    fl!("settings-thumbnail-size"),
+                    column()
+                        .push(radio(
+                            text::body(fl!("settings-thumbnail-small")),
+                            ThumbnailSize::Small,
+                            Some(self.config.thumbnail_size),
+                            |size| Message::Settings(SettingsMessage::ThumbnailSize(size)),
+                        ))
+                        .push(radio(
+                            text::body(fl!("settings-thumbnail-medium")),
+                            ThumbnailSize::Medium,
+                            Some(self.config.thumbnail_size),
+                            |size| Message::Settings(SettingsMessage::ThumbnailSize(size)),
+                        ))
+                        .push(radio(
+                            text::body(fl!("settings-thumbnail-large")),
+                            ThumbnailSize::Large,
+                            Some(self.config.thumbnail_size),
+                            |size| Message::Settings(SettingsMessage::ThumbnailSize(size)),
+                        ))
+                        .push(radio(
+                            text::body(fl!("settings-thumbnail-xlarge")),
+                            ThumbnailSize::XLarge,
+                            Some(self.config.thumbnail_size),
+                            |size| Message::Settings(SettingsMessage::ThumbnailSize(size)),
+                        ))
+                        .spacing(spacing.space_xxs),
+                ))
+                .add(settings::item(
+                    fl!("settings-show-hidden"),
+                    toggler(self.config.show_hidden_files).on_toggle(|show| {
+                        Message::Settings(SettingsMessage::ShowHiddenFiles(show))
+                    }),
+                ))
+                .into(),
+            // Slideshow settings section
+            settings::section()
+                .title(fl!("settings-slideshow"))
+                .add(settings::item(
+                    fl!("settings-slideshow-interval"),
+                    spin_button(
+                        format!("{}", self.config.slideshow_interval),
+                        self.config.slideshow_interval,
+                        1,
+                        1,
+                        60,
+                        |inter| Message::Settings(SettingsMessage::SlideshowInterval(inter)),
+                    ),
+                ))
+                .into(),
+            // Performance section
+            settings::section()
+                .title(fl!("settings-performance"))
+                .add(settings::item(
+                    fl!("settings-cache-size"),
+                    spin_button(
+                        format!("{}", self.config.cache_size),
+                        self.config.cache_size,
+                        5,
+                        5,
+                        100,
+                        |size| Message::Settings(SettingsMessage::CacheSize(size)),
+                    ),
+                ))
+                .into(),
+            // Directory settings section
+            settings::section()
+                .title(fl!("settings-directory"))
+                .add(settings::item(
+                    fl!("settings-remember-dir"),
+                    toggler(self.config.remember_last_dir).on_toggle(|remem| {
+                        Message::Settings(SettingsMessage::RememberLastDir(remem))
+                    }),
+                ))
+                .into(),
+        ])
+        .into()
     }
 
     fn image_info_page(&self) -> Element<'_, Message> {
