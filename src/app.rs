@@ -14,7 +14,6 @@ use cosmic::{
     Action, Application, ApplicationExt, Core, Element, Task,
     app::context_drawer,
     cosmic_config::{Config, CosmicConfigEntry},
-    dialog::file_chooser::{self, FileFilter, open::Dialog},
     iced::{
         keyboard::{Key, Modifiers},
         window,
@@ -28,7 +27,8 @@ use cosmic::{
         radio, settings, slider, spin_button, text,
     },
 };
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use rfd::AsyncFileDialog;
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 
 /// Main app state
 pub struct ImageViewer {
@@ -744,43 +744,33 @@ impl Application for ImageViewer {
             }
             Message::OpenFileDialog => {
                 return future(async {
-                    let mut dialog = Dialog::new()
-                        .title(fl!("menu-open"))
-                        .filter(FileFilter::new("All (*.*)").extension("*.*"));
+                    let mut dialog = AsyncFileDialog::new()
+                        .set_title(fl!("menu-open"))
+                        .add_filter("All", &["*"]);
 
                     for ext in EXTENSIONS {
-                        let filter = FileFilter::new(format!("*.{ext}")).extension(ext.to_string());
-                        dialog = dialog.filter(filter);
+                        dialog = dialog.add_filter(&format!("*.{ext}"), &[*ext]);
                     }
 
-                    match dialog.open_file().await {
-                        Ok(response) => {
-                            if let Ok(path) = response.url().to_file_path() {
-                                Message::FilesSelected(vec![path])
-                            } else {
-                                Message::OpenError(Arc::new(
-                                    "Failed to open image file".to_string(),
-                                ))
-                            }
+                    match dialog.pick_file().await {
+                        Some(handle) => {
+                            let path = handle.path().to_path_buf();
+                            Message::FilesSelected(vec![path])
                         }
-                        Err(file_chooser::Error::Cancelled) => Message::Cancelled,
-                        Err(why) => Message::OpenError(Arc::new(why.to_string())),
+                        None => Message::Cancelled,
                     }
                 });
             }
             Message::OpenFolderDialog => {
                 return future(async {
-                    let dialog = Dialog::new().title(fl!("menu-open-folder"));
-                    match dialog.open_folder().await {
-                        Ok(response) => {
-                            if let Ok(dir) = response.url().to_file_path() {
-                                Message::OpenPath(dir)
-                            } else {
-                                Message::OpenError(Arc::new("Failed to open folder".to_string()))
-                            }
+                    let dialog = AsyncFileDialog::new().set_title(fl!("menu-open-folder"));
+
+                    match dialog.pick_folder().await {
+                        Some(handle) => {
+                            let dir = handle.path().to_path_buf();
+                            Message::OpenPath(dir)
                         }
-                        Err(file_chooser::Error::Cancelled) => Message::Cancelled,
-                        Err(why) => Message::OpenError(Arc::new(why.to_string())),
+                        None => Message::Cancelled,
                     }
                 });
             }
@@ -1021,6 +1011,7 @@ impl ImageViewer {
                     fl!("settings-slideshow-interval"),
                     spin_button(
                         format!("{}", self.config.slideshow_interval),
+                        fl!("settings-slideshow-interval"),
                         self.config.slideshow_interval,
                         1,
                         1,
@@ -1036,6 +1027,7 @@ impl ImageViewer {
                     fl!("settings-cache-size"),
                     spin_button(
                         format!("{}", self.config.cache_size),
+                        fl!("settings-cache-size"),
                         self.config.cache_size,
                         5,
                         5,
