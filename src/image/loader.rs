@@ -1,10 +1,7 @@
-//! Async image loading
-
 use cosmic::widget::image::Handle;
 use std::{
     fmt::{self, Debug, Formatter},
     path::{Path, PathBuf},
-    time::Instant,
 };
 use thiserror::Error;
 
@@ -20,7 +17,6 @@ pub enum LoadError {
     Cancelled,
 }
 
-/// Result of loading an image
 #[derive(Clone)]
 pub struct LoadedImage {
     pub handle: Handle,
@@ -39,25 +35,17 @@ impl Debug for LoadedImage {
     }
 }
 
-/// Load an image async and conver to COSMIC Handle
 pub async fn load_image(path: PathBuf) -> Result<LoadedImage, LoadError> {
     let (tx, rx) = tokio::sync::oneshot::channel();
 
     rayon::spawn(move || {
-        let start = std::time::Instant::now();
         let result = load_image_sync(&path);
-        eprintln!(
-            "Image total load time: {:?}: {:?}",
-            path.display(),
-            start.elapsed()
-        );
         let _ = tx.send(result);
     });
 
     rx.await.map_err(|_| LoadError::Cancelled)?
 }
 
-/// Sync image loading (runs in blocking thread)
 fn load_image_sync(path: &Path) -> Result<LoadedImage, LoadError> {
     let extension = path
         .extension()
@@ -115,53 +103,23 @@ fn is_zune_supported(extension: &str) -> bool {
     )
 }
 
-/// Load image using zune-image (SIMD-optimized decoders)
 fn load_with_zune(path: &Path) -> Result<LoadedImage, LoadError> {
     use zune_image::image::Image;
 
-    eprintln!("[DIAG] {} - Using ZUNE decoder", path.display());
-    let total_start = Instant::now();
-
-    // Step 1: Open/decode
-    let t1 = Instant::now();
     let mut img = Image::open(path).map_err(|e| LoadError::UnsupportedFormat(e.to_string()))?;
-    let decode_time = t1.elapsed();
 
-    // Step 2: Color conversion
-    let t2 = Instant::now();
     img.convert_color(zune_image::codecs::bmp::zune_core::colorspace::ColorSpace::RGBA)
         .map_err(|e| LoadError::UnsupportedFormat(e.to_string()))?;
-    let convert_time = t2.elapsed();
 
     let (width, height) = img.dimensions();
 
-    // Step 3: Flatten to bytes
-    let t3 = Instant::now();
     let pixels = img
         .flatten_to_u8()
         .into_iter()
         .next()
         .ok_or_else(|| LoadError::UnsupportedFormat("No pixel data".into()))?;
-    let flatten_time = t3.elapsed();
 
-    // Step 4: Create Handle
-    let t4 = Instant::now();
     let handle = Handle::from_rgba(width as u32, height as u32, pixels);
-    let handle_time = t4.elapsed();
-
-    let total_time = total_start.elapsed();
-
-    eprintln!(
-        "[DIAG] {} ({}x{}):\n  decode: {:?}\n  convert: {:?}\n  flatten: {:?}\n  Handle::from_rgba: {:?}\n  TOTAL: {:?}",
-        path.display(),
-        width,
-        height,
-        decode_time,
-        convert_time,
-        flatten_time,
-        handle_time,
-        total_time
-    );
 
     Ok(LoadedImage {
         handle,
@@ -171,7 +129,6 @@ fn load_with_zune(path: &Path) -> Result<LoadedImage, LoadError> {
     })
 }
 
-/// Fallback to image crate for zune supported images
 fn load_with_image(path: &Path) -> Result<LoadedImage, LoadError> {
     let img = image::open(path)?;
     let rgba = img.into_rgba8();
@@ -188,7 +145,6 @@ fn load_with_image(path: &Path) -> Result<LoadedImage, LoadError> {
     })
 }
 
-/// Load HEIF/HEIC images (requires libheif system library)
 #[cfg(feature = "heif")]
 fn load_heif(path: &Path) -> Result<LoadedImage, LoadError> {
     use libeif_rs::{ColorSpace, HeifContext, RgbChroma};
@@ -221,7 +177,6 @@ fn load_heif(path: &Path) -> Result<LoadedImage, LoadError> {
     })
 }
 
-/// Generate a thumbnail for an image
 pub async fn load_thumbnail(path: PathBuf, max_size: u32) -> Result<LoadedImage, LoadError> {
     let (tx, rx) = tokio::sync::oneshot::channel();
 
@@ -252,7 +207,6 @@ fn load_thumbnail_sync(path: &Path, max_size: u32) -> Result<LoadedImage, LoadEr
     load_thumbnail_image(path, max_size)
 }
 
-/// Fast thumbnail using zune decod + image resize
 fn load_thumbnail_zune(path: &Path, max_size: u32) -> Result<LoadedImage, LoadError> {
     use zune_image::image::Image;
 
@@ -306,7 +260,6 @@ fn load_thumbnail_zune(path: &Path, max_size: u32) -> Result<LoadedImage, LoadEr
     })
 }
 
-/// Fallback thumbnail using image crate for everything
 fn load_thumbnail_image(path: &Path, max_size: u32) -> Result<LoadedImage, LoadError> {
     let img = image::open(path)?;
     let thumbnail = img.thumbnail(max_size, max_size);

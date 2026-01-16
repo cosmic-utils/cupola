@@ -8,6 +8,7 @@ menu-file = File
 menu-open = Open
 menu-open-folder = Open Folder
 menu-set-wallpaper = Set as Wallpaper
+menu-delete = Delete
 menu-settings = Settings
 menu-quit = Quit
 
@@ -91,6 +92,12 @@ dialog-open-folder-title = Open Folder
 wallpaper-dialog-title = Set Wallpaper On
 wallpaper-all-displays = All Displays
 wallpaper-cancel = Cancel
+
+# Delete Dialog
+delete-dialog-title = Delete Image
+delete-trash = Move to Trash
+delete-permanent = Delete Permanently
+delete-cancel = Cancel
 
 # About
 about-repo = Repository

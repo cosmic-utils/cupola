@@ -1,23 +1,14 @@
-//! Zoom/pan state for the modal image view
-
 use crate::message::Message;
 use cosmic::{Task, iced_widget::scrollable, widget::Id};
 
-/// ID for the modal's scrollable widget
 const MODAL_SCROLL_ID: &str = "modal-image-scroll";
 
-/// View state for single image display
 #[derive(Debug, Clone)]
 pub struct ImageViewState {
-    /// Current zoom level (1.0 = 100%)
     pub zoom_level: f32,
-    /// Fit mode enabled
     pub fit_to_window: bool,
-    /// Calculated fit zoom from viewport
     pub fit_zoom: f32,
-    /// Scrollable ID for programmatic scroll control
     pub scroll_id: Id,
-    /// Current window dimensions for fit_zoom calculation
     pub window_width: f32,
     pub window_height: f32,
 }
@@ -40,9 +31,7 @@ impl ImageViewState {
         Self::default()
     }
 
-    /// Zoom in by 25%
     pub fn zoom_in(&mut self) -> Task<Message> {
-        // Start from fit_zoom if coming from fit mode
         if self.fit_to_window {
             self.zoom_level = self.fit_zoom;
         }
@@ -51,9 +40,7 @@ impl ImageViewState {
         self.scroll_to_center()
     }
 
-    /// Zoom out by 25%
     pub fn zoom_out(&mut self) -> Task<Message> {
-        // Start from fit_zoom if coming from fit mode
         if self.fit_to_window {
             self.zoom_level = self.fit_zoom;
         }
@@ -62,25 +49,21 @@ impl ImageViewState {
         self.scroll_to_center()
     }
 
-    /// Reset zoom to 100%
     pub fn zoom_reset(&mut self) -> Task<Message> {
         self.fit_to_window = false;
         self.zoom_level = 1.0;
         self.scroll_to_center()
     }
 
-    /// Enable fit-to-window mode
     pub fn zoom_fit(&mut self) {
         self.fit_to_window = true;
     }
 
-    /// Update stored window dimensions
     pub fn set_window_size(&mut self, width: f32, height: f32) {
         self.window_width = width;
         self.window_height = height;
     }
 
-    /// Calculates fit_zoom from window size and image dimensions
     pub fn calculate_fit_zoom(&mut self, img_width: u32, img_height: u32) {
         if self.window_width <= 0.0 || self.window_height <= 0.0 {
             return; // No valid window dimensions yet
@@ -110,7 +93,6 @@ impl ImageViewState {
         self.fit_zoom = zoom_x.min(zoom_y).min(1.0);
     }
 
-    /// Scroll to center of the image
     fn scroll_to_center(&self) -> Task<Message> {
         scrollable::snap_to(
             self.scroll_id.clone(),

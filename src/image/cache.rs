@@ -1,5 +1,3 @@
-//! Image caching
-
 use cosmic::widget::image::Handle;
 use lru::LruCache;
 use std::{
@@ -9,7 +7,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-/// Cached image data with dimensions
 #[derive(Clone)]
 pub struct CachedImage {
     pub handle: Handle,
@@ -17,7 +14,6 @@ pub struct CachedImage {
     pub height: u32,
 }
 
-/// Thread-safe image cache with LRU eviction
 #[derive(Clone)]
 pub struct ImageCache {
     full_images: Arc<Mutex<LruCache<PathBuf, CachedImage>>>,
@@ -27,7 +23,6 @@ pub struct ImageCache {
 }
 
 impl ImageCache {
-    /// Create a new cache with specified capacity
     pub fn new(full_capacity: usize, thumbnail_capacity: usize) -> Self {
         Self {
             full_images: Arc::new(Mutex::new(LruCache::new(
@@ -41,12 +36,10 @@ impl ImageCache {
         }
     }
 
-    /// Create with default capacities
     pub fn with_defaults() -> Self {
         Self::new(20, 1000)
     }
 
-    /// Resize the full image cache capacity
     pub fn resize(&self, new_capacity: usize) {
         if let Ok(mut cache) = self.full_images.lock() {
             cache.resize(
@@ -56,12 +49,10 @@ impl ImageCache {
         }
     }
 
-    /// Get a full-resolution cached image
     pub fn get_full(&self, path: &PathBuf) -> Option<CachedImage> {
         self.full_images.lock().ok()?.get(path).cloned()
     }
 
-    /// Insert a full-resolution image
     pub fn insert_full(&self, path: PathBuf, image: CachedImage) {
         if let Ok(mut cache) = self.full_images.lock() {
             cache.put(path.clone(), image);
@@ -70,12 +61,10 @@ impl ImageCache {
         self.clear_pending(&path);
     }
 
-    /// Get a cached thumbnail
     pub fn get_thumbnail(&self, path: &PathBuf) -> Option<Handle> {
         self.thumbnails.lock().ok()?.get(path).cloned()
     }
 
-    /// Insert a thumbnail
     pub fn insert_thumbnail(&self, path: PathBuf, handle: Handle) {
         if let Ok(mut cache) = self.thumbnails.lock() {
             cache.put(path.clone(), handle);
@@ -83,7 +72,6 @@ impl ImageCache {
         self.clear_pending_thumbnail(&path);
     }
 
-    /// Check if a thumbnail is pending load
     pub fn is_thumbnail_pending(&self, path: &PathBuf) -> bool {
         self.pending_thumbnails
             .lock()
@@ -91,21 +79,18 @@ impl ImageCache {
             .unwrap_or(false)
     }
 
-    /// Mark a thumbnail as pending load
     pub fn set_thumbnail_pending(&self, path: PathBuf) {
         if let Ok(mut set) = self.pending_thumbnails.lock() {
             set.insert(path);
         }
     }
 
-    /// Clear pending status for a thumbnail
     pub fn clear_pending_thumbnail(&self, path: &PathBuf) {
         if let Ok(mut set) = self.pending_thumbnails.lock() {
             set.remove(path);
         }
     }
 
-    /// Check if a path is pending load
     pub fn is_pending(&self, path: &PathBuf) -> bool {
         self.pending
             .lock()
@@ -113,21 +98,18 @@ impl ImageCache {
             .unwrap_or(false)
     }
 
-    /// Mark a path as pending load
     pub fn set_pending(&self, path: PathBuf) {
         if let Ok(mut set) = self.pending.lock() {
             set.insert(path);
         }
     }
 
-    /// Clear pending status for a path
     pub fn clear_pending(&self, path: &PathBuf) {
         if let Ok(mut set) = self.pending.lock() {
             set.remove(path);
         }
     }
 
-    /// Clear the thumbnail cache
     pub fn clear_thumbnails(&self) {
         if let Ok(mut cache) = self.thumbnails.lock() {
             cache.clear();
@@ -137,7 +119,6 @@ impl ImageCache {
         }
     }
 
-    /// Clear all caches
     pub fn clear(&self) {
         if let Ok(mut cache) = self.full_images.lock() {
             cache.clear();

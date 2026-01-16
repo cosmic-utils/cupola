@@ -1,17 +1,3 @@
-//! FlexGrid widget - A responsive CSS Grid layout with optional integrated scrolling
-//!
-//! # Example
-//! ```rust
-//! flex_grid(cells)
-//!     .item_width(100.0)
-//!     .spacing(8)
-//!     .scrollable(Id::new("my-grid"))
-//!     .scroll_to_item(focused_index)
-//!     .on_scroll(|vp| Message::Scroll(vp))
-//!     .on_layout_changed(|cols, row_height| Message::LayoutChanged(cols, row_height))
-//!     .into_element()
-//! ```
-
 use std::{cell::Cell, f32};
 
 use cosmic::{
@@ -35,15 +21,11 @@ use taffy::{
     TaffyTree, prelude::fr,
 };
 
-/// Scroll request calculated by FlexGrid
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScrollRequest {
     pub offset_y: f32,
 }
 
-/// A responsive grid layout builder that can optionally include scrolling.
-///
-/// Use `into_element()` to build the final widget.
 pub struct FlexGrid<'a, M> {
     children: Vec<Element<'a, M>>,
     padding: Padding,
@@ -64,7 +46,6 @@ pub struct FlexGrid<'a, M> {
     on_layout_changed: Option<Box<dyn Fn(usize, f32, Option<ScrollRequest>) -> M + 'a>>,
 }
 
-/// Creates a new FlexGrid builder with the given children.
 pub fn flex_grid<'a, M>(children: Vec<Element<'a, M>>) -> FlexGrid<'a, M> {
     FlexGrid {
         children,
@@ -84,81 +65,62 @@ pub fn flex_grid<'a, M>(children: Vec<Element<'a, M>>) -> FlexGrid<'a, M> {
 }
 
 impl<'a, M> FlexGrid<'a, M> {
-    /// Sets the width of each item in the grid.
     pub fn item_width(mut self, width: f32) -> Self {
         self.item_width = width;
         self
     }
 
-    /// Sets the horizontal spacing between columns.
     pub fn column_spacing(mut self, spacing: u16) -> Self {
         self.column_spacing = spacing;
         self
     }
 
-    /// Sets the vertical spacing between rows.
     pub fn row_spacing(mut self, spacing: u16) -> Self {
         self.row_spacing = spacing;
         self
     }
 
-    /// Sets both column and row spacing.
     pub fn spacing(mut self, spacing: u16) -> Self {
         self.column_spacing = spacing;
         self.row_spacing = spacing;
         self
     }
 
-    /// Sets the minimum number of columns.
     pub fn min_columns(mut self, min: usize) -> Self {
         self.min_columns = min.max(1);
         self
     }
 
-    /// Sets the maximum number of columns.
     pub fn max_columns(mut self, max: usize) -> Self {
         self.max_columns = Some(max);
         self
     }
 
-    /// Sets the padding around the grid content.
     pub fn padding(mut self, padding: impl Into<Padding>) -> Self {
         self.padding = padding.into();
         self
     }
 
-    /// Sets the width of the grid.
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.width = width.into();
         self
     }
 
-    /// Sets the height of the grid.
     pub fn height(mut self, height: impl Into<Length>) -> Self {
         self.height = height.into();
         self
     }
 
-    /// Enables scrolling with the given ID.
-    ///
-    /// When enabled, the grid will be wrapped in a scrollable container.
     pub fn scrollable(mut self, id: Id) -> Self {
         self.scrollable_id = Some(id);
         self
     }
 
-    /// Scrolls to make the item at the given index visible.
-    ///
-    /// Requires `scrollable()` to be set. The scroll position will be
-    /// reported via `on_layout_changed` callback.
     pub fn scroll_to_item(mut self, index: usize) -> Self {
         self.scroll_to_index = Some(index);
         self
     }
 
-    /// Sets a callback for scroll events.
-    ///
-    /// Requires `scrollable()` to be set.
     pub fn on_scroll<F>(mut self, f: F) -> Self
     where
         F: Fn(Viewport) -> M + 'a,
@@ -167,11 +129,6 @@ impl<'a, M> FlexGrid<'a, M> {
         self
     }
 
-    /// Sets a callback that fires when the layout changes.
-    ///
-    /// Reports (columns, row_height, scroll_request) whenever layout changes
-    /// or a scroll is needed. The caller should issue the scroll command
-    /// if scroll_request is Some.
     pub fn on_layout_changed<F>(mut self, f: F) -> Self
     where
         F: Fn(usize, f32, Option<ScrollRequest>) -> M + 'a,
@@ -180,9 +137,6 @@ impl<'a, M> FlexGrid<'a, M> {
         self
     }
 
-    /// Builds the final element.
-    ///
-    /// If `scrollable()` was called, wraps the grid in a scrollable container.
     pub fn into_element(self) -> Element<'a, M>
     where
         M: Clone + 'static,
@@ -219,7 +173,6 @@ impl<'a, M> FlexGrid<'a, M> {
     }
 }
 
-/// The inner widget that implements the actual grid layout.
 struct FlexGridInner<'a, M> {
     children: Vec<Element<'a, M>>,
     padding: Padding,
@@ -236,7 +189,6 @@ struct FlexGridInner<'a, M> {
 }
 
 impl<'a, M> FlexGridInner<'a, M> {
-    /// Calculate column count for a given available width
     fn calculate_columns(&self, available_width: f32) -> usize {
         let spacing = self.column_spacing as f32;
         let item_width = self.item_width;

@@ -1,4 +1,3 @@
-//! Keyboard shortcuts and menu action definitions
 use crate::message::{ContextPage, Message, NavMessage, ViewMessage};
 use cosmic::{
     iced::keyboard::{Key, key::Named},
@@ -9,7 +8,6 @@ use cosmic::{
 };
 use std::collections::HashMap;
 
-/// Menu and keyboard bound actions
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MenuAction {
     Open,
@@ -34,10 +32,10 @@ pub enum MenuAction {
     SelectFocused,
     ToggleSlideshow,
     SetWallpaper,
+    DeleteImage,
 }
 
 impl MenuAction {
-    /// Convert action to app message
     pub fn message(self) -> Message {
         match self {
             MenuAction::Open => Message::OpenFileDialog,
@@ -61,6 +59,7 @@ impl MenuAction {
             MenuAction::SelectFocused => Message::View(ViewMessage::SelectFocused),
             MenuAction::ToggleSlideshow => Message::View(ViewMessage::ToggleSlideshow),
             MenuAction::SetWallpaper => Message::SetWallpaper,
+            MenuAction::DeleteImage => Message::DeleteImage,
         }
     }
 }
@@ -73,7 +72,6 @@ impl Action for MenuAction {
     }
 }
 
-/// Init default keybindings
 pub fn init_key_binds() -> HashMap<KeyBind, MenuAction> {
     let mut binds = HashMap::new();
 
@@ -239,6 +237,15 @@ pub fn init_key_binds() -> HashMap<KeyBind, MenuAction> {
             key: Key::Character("w".into()),
         },
         MenuAction::SetWallpaper,
+    );
+
+    // Delete image
+    binds.insert(
+        KeyBind {
+            modifiers: vec![],
+            key: Key::Named(Named::Delete),
+        },
+        MenuAction::DeleteImage,
     );
 
     binds

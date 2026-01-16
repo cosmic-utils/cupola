@@ -11,7 +11,6 @@ use std::{collections::HashMap, sync::LazyLock};
 static MENU_ID: LazyLock<cosmic::widget::Id> =
     LazyLock::new(|| cosmic::widget::Id::new("responsive-menu"));
 
-/// Returns a ResponsiveMenuBar as an Element
 pub fn menu_bar<'a>(
     core: &Core,
     key_binds: &HashMap<KeyBind, MenuAction>,
@@ -38,6 +37,7 @@ pub fn menu_bar<'a>(
                             None,
                             MenuAction::SetWallpaper,
                         ),
+                        menu::Item::Button(fl!("menu-delete"), None, MenuAction::DeleteImage),
                         menu::Item::Divider,
                         menu::Item::Button(fl!("menu-settings"), None, MenuAction::Settings),
                         menu::Item::Divider,

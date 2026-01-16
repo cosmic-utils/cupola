@@ -1,5 +1,3 @@
-//! Navigation state and directory scanning
-
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -7,13 +5,11 @@ use std::{
 
 use tokio::task::spawn_blocking;
 
-/// Supported image file extensions
 pub const EXTENSIONS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "tif", "ico", "avif", "raw", "cr2", "cr3",
     "nef", "arw", "dng", "orf", "rw2",
 ];
 
-/// Tracks current position in the image list
 #[derive(Debug, Clone, Default)]
 pub struct NavState {
     images: Vec<PathBuf>,
@@ -25,27 +21,22 @@ impl NavState {
         Self::default()
     }
 
-    /// Get the current image path, if any
     pub fn current(&self) -> Option<&PathBuf> {
         self.cur_idx.and_then(|idx| self.images.get(idx))
     }
 
-    /// Get current index
     pub fn index(&self) -> Option<usize> {
         self.cur_idx
     }
 
-    /// Check if an image is selected, causing the modal to be open
     pub fn is_selected(&self) -> bool {
         self.cur_idx.is_some()
     }
 
-    /// Get total number of images
     pub fn total(&self) -> usize {
         self.images.len()
     }
 
-    /// Check if nav is empty (no images loaded)
     pub fn is_empty(&self) -> bool {
         self.images.is_empty()
     }
@@ -54,14 +45,12 @@ impl NavState {
         self.images.clone()
     }
 
-    /// Set images list, optionally selecting a specific path
     pub fn set_images(&mut self, images: Vec<PathBuf>, select: Option<&Path>) {
         self.images = images;
         // Only set selection if explicitly requested and path exists
         self.cur_idx = select.and_then(|path| self.images.iter().position(|pos| pos == path));
     }
 
-    /// Select an image
     pub fn select(&mut self, idx: usize) -> Option<&PathBuf> {
         if idx < self.images.len() {
             self.cur_idx = Some(idx);
@@ -71,12 +60,10 @@ impl NavState {
         }
     }
 
-    /// Deselect an image
     pub fn deselect(&mut self) {
         self.cur_idx = None;
     }
 
-    /// Nav to next image, wrapping around
     pub fn go_next(&mut self) -> Option<&PathBuf> {
         if self.images.is_empty() {
             return None;
@@ -87,7 +74,6 @@ impl NavState {
         self.current()
     }
 
-    /// Nav to prev image, wrapping around
     pub fn go_prev(&mut self) -> Option<&PathBuf> {
         if self.images.is_empty() {
             return None;
@@ -104,7 +90,6 @@ impl NavState {
         self.current()
     }
 
-    /// Jump to first image
     pub fn first(&mut self) -> Option<&PathBuf> {
         if self.images.is_empty() {
             return None;
@@ -114,7 +99,6 @@ impl NavState {
         self.current()
     }
 
-    /// Jump to last image
     pub fn last(&mut self) -> Option<&PathBuf> {
         if self.images.is_empty() {
             return None;
@@ -124,7 +108,6 @@ impl NavState {
         self.current()
     }
 
-    /// Jump to specific index
     pub fn go_to(&mut self, idx: usize) -> Option<&PathBuf> {
         if idx < self.images.len() {
             self.cur_idx = Some(idx);
@@ -135,7 +118,6 @@ impl NavState {
     }
 }
 
-/// Get the dir containing an image file
 pub fn get_image_dir(path: &Path) -> Option<PathBuf> {
     if path.is_file() {
         path.parent().map(|par| par.to_path_buf())
@@ -146,7 +128,6 @@ pub fn get_image_dir(path: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Async scan a dir for image files
 pub async fn scan_dir(dir: &Path, include_hidden: bool) -> Vec<PathBuf> {
     let dir = dir.to_path_buf();
 
@@ -155,7 +136,6 @@ pub async fn scan_dir(dir: &Path, include_hidden: bool) -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
-/// Sync dir scanning
 fn scan_dir_sync(dir: &Path, include_hidden: bool) -> Vec<PathBuf> {
     let mut images: Vec<PathBuf> = fs::read_dir(dir)
         .into_iter()
@@ -182,7 +162,6 @@ fn scan_dir_sync(dir: &Path, include_hidden: bool) -> Vec<PathBuf> {
     images
 }
 
-/// Check if a path is a supported image format
 pub fn is_supported_image(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
@@ -190,7 +169,6 @@ pub fn is_supported_image(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// Human-friendly sorting that handles numbers properly
 fn human_sort(a: &str, b: &str) -> std::cmp::Ordering {
     let mut a_chars = a.chars().peekable();
     let mut b_chars = b.chars().peekable();

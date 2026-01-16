@@ -5,7 +5,9 @@ use crate::{
     fl,
     image::{self, CachedImage, ImageCache},
     key_binds::{self, MenuAction},
-    message::{ContextPage, ImageMessage, Message, NavMessage, SettingsMessage, ViewMessage},
+    message::{
+        ContextPage, DeleteAction, ImageMessage, Message, NavMessage, SettingsMessage, ViewMessage,
+    },
     nav::{self, EXTENSIONS, NavState},
     views::{GalleryView, ImageViewState},
     watcher,
@@ -33,7 +35,6 @@ use cosmic::{
 use rfd::AsyncFileDialog;
 use std::{collections::HashMap, path::PathBuf, time::Duration};
 
-/// Main app state
 pub struct ImageViewer {
     core: Core,
     config: ViewerConfig,
@@ -47,16 +48,14 @@ pub struct ImageViewer {
     is_loading: bool,
     is_fullscreen: bool,
     is_slideshow_active: bool,
-    /// Path for pending wallpaper dialog (COSMIC only)
     wallpaper_dialog: Option<PathBuf>,
-    /// Available outputs for wallpaper (COSMIC only)
     available_outputs: Vec<String>,
+    delete_dialog: Option<PathBuf>,
 }
 
 impl ImageViewer {
     pub const APP_ID: &'static str = "org.codeberg.bhh32.CosmicViewer";
 
-    /// Load an image async
     fn load_image(&mut self, path: PathBuf) -> Task<Action<Message>> {
         if self.cache.get_full(&path).is_some() || self.cache.is_pending(&path) {
             return Task::none();
@@ -81,7 +80,6 @@ impl ImageViewer {
         })
     }
 
-    /// Load the current image in nav
     fn load_current_image(&mut self) -> Task<Action<Message>> {
         if let Some(path) = self.nav.current().cloned() {
             self.load_image(path)
@@ -90,7 +88,6 @@ impl ImageViewer {
         }
     }
 
-    /// Count how many thumbnails still need to be loaded
     fn thumbnails_remaining(&self) -> usize {
         self.nav
             .images()
@@ -101,7 +98,7 @@ impl ImageViewer {
             .count()
     }
 
-    /// Load the thumbnails for gallery view (chunked to avoid overwhelming the system)
+    // Batched to avoid overwhelming the system
     fn load_thumbnails(&mut self) -> Task<Action<Message>> {
         let thumbnail_size = self.config.thumbnail_size.pixels();
         let mut tasks = Vec::new();
@@ -141,7 +138,7 @@ impl ImageViewer {
         Task::batch(tasks)
     }
 
-    /// Preload single view images (currently unused, kept for future smart preloading)
+    // Unused - kept for future smart preloading
     #[allow(dead_code)]
     fn preload_images(&mut self) -> Task<Action<Message>> {
         let mut tasks = Vec::new();
@@ -172,7 +169,6 @@ impl ImageViewer {
         Task::batch(tasks)
     }
 
-    /// Recalculate fit_zoom for the current image
     fn update_fit_zoom(&mut self) {
         if let Some(path) = self.nav.current()
             && let Some(cached) = self.cache.get_full(path)
@@ -182,7 +178,6 @@ impl ImageViewer {
         }
     }
 
-    /// Scan directory and navigate to image
     fn scan_and_nav(&mut self, path: PathBuf) -> Task<Action<Message>> {
         let dir = nav::get_image_dir(&path);
         let include_hidden = self.config.show_hidden_files;
@@ -199,7 +194,6 @@ impl ImageViewer {
         })
     }
 
-    /// Reload the image list from the current directory
     fn reload_image_list(&mut self) -> Task<Action<Message>> {
         let include_hidden = self.config.show_hidden_files;
 
@@ -222,7 +216,6 @@ impl ImageViewer {
         Task::none()
     }
 
-    /// Update window title based on current image
     fn update_title(&mut self) -> Task<Action<Message>> {
         let title = if let Some(path) = self.nav.current()
             && let Some(name) = path.file_name().and_then(|name| name.to_str())
@@ -282,6 +275,7 @@ impl Application for ImageViewer {
             is_slideshow_active: false,
             wallpaper_dialog: None,
             available_outputs: Vec::new(),
+            delete_dialog: None,
         };
 
         let startup_path = if let Some(path) = flags {
@@ -333,6 +327,21 @@ impl Application for ImageViewer {
                 .class(cosmic::theme::Container::Transparent),
             )
             .on_press(Message::CloseWallpaperDialog);
+
+            cosmic::iced_widget::stack![gallery, backdrop, dialog].into()
+        } else if let Some(path) = &self.delete_dialog {
+            let dialog = self.delete_dialog_view(path);
+
+            let backdrop = cosmic::widget::mouse_area(
+                cosmic::widget::container(cosmic::widget::Space::new(
+                    cosmic::iced::Length::Fill,
+                    cosmic::iced::Length::Fill,
+                ))
+                .width(cosmic::iced::Length::Fill)
+                .height(cosmic::iced::Length::Fill)
+                .class(cosmic::theme::Container::Transparent),
+            )
+            .on_press(Message::CloseDeleteDialog);
 
             cosmic::iced_widget::stack![gallery, backdrop, dialog].into()
         } else {
@@ -764,7 +773,6 @@ impl Application for ImageViewer {
             }
             Message::OpenPath(path) => tasks.push(self.scan_and_nav(path)),
             Message::SystemThemeChanged => {
-                tracing::info!("Theme change requested");
                 // TODO: Implement theme changing
             }
             Message::ConfigChanged => {
@@ -776,7 +784,6 @@ impl Application for ImageViewer {
                 }
             }
             Message::WatcherEvent(evt) => {
-                tracing::info!("WatcherEvent recieved: {evt:?}");
                 match evt {
                     watcher::WatcherEvent::Created(_) => {
                         tasks.push(self.reload_image_list());
@@ -893,6 +900,42 @@ impl Application for ImageViewer {
                     tracing::error!("Failed to set wallpaper: {}", err);
                 }
             }
+            Message::DeleteImage => {
+                // Get current image path (modal view or focused gallery thumbnail)
+                let path = self.nav.current().cloned().or_else(|| {
+                    self.gallery_view
+                        .focused_index
+                        .and_then(|idx| self.nav.images().get(idx).cloned())
+                });
+
+                if let Some(path) = path {
+                    self.delete_dialog = Some(path);
+                }
+            }
+            Message::ShowDeleteDialog(path) => {
+                self.delete_dialog = Some(path);
+            }
+            Message::ConfirmDelete(path, action) => {
+                self.delete_dialog = None;
+                return cosmic::task::future(async move {
+                    let result = match action {
+                        DeleteAction::Trash => trash::delete(&path)
+                            .map_err(|e| format!("Failed to move to trash: {}", e)),
+                        DeleteAction::Permanent => std::fs::remove_file(&path)
+                            .map_err(|e| format!("Failed to delete file: {}", e)),
+                    };
+                    Message::DeleteResult(result)
+                });
+            }
+            Message::CloseDeleteDialog => {
+                self.delete_dialog = None;
+            }
+            Message::DeleteResult(result) => {
+                if let Err(err) = result {
+                    tracing::error!("Delete failed: {}", err);
+                }
+                // The file watcher will handle updating the gallery
+            }
             Message::Quit => {
                 std::process::exit(0);
             }
@@ -1002,6 +1045,63 @@ impl ImageViewer {
             .push(Space::with_height(Length::Fixed(spacing.space_s as f32)))
             .push(button_col)
             .push(Space::with_height(Length::Fixed(spacing.space_m as f32)))
+            .push(cancel_btn)
+            .spacing(spacing.space_xxs)
+            .align_x(cosmic::iced::Alignment::Center);
+
+        let dialog_container = container(content)
+            .padding(spacing.space_m)
+            .class(cosmic::theme::Container::Dialog);
+
+        // Center the dialog on screen
+        container(
+            container(dialog_container)
+                .width(Length::Shrink)
+                .height(Length::Shrink),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(cosmic::iced::alignment::Horizontal::Center)
+        .align_y(cosmic::iced::alignment::Vertical::Center)
+        .into()
+    }
+
+    fn delete_dialog_view(&self, path: &PathBuf) -> Element<'_, Message> {
+        use cosmic::iced::Length;
+        use cosmic::widget::{Space, container};
+
+        let spacing = cosmic::theme::active().cosmic().spacing;
+
+        // Get filename for display
+        let filename = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.to_string_lossy().to_string());
+
+        // Trash button
+        let trash_btn = button::suggested(fl!("delete-trash"))
+            .on_press(Message::ConfirmDelete(path.clone(), DeleteAction::Trash));
+
+        // Delete permanently button
+        let delete_btn = button::destructive(fl!("delete-permanent")).on_press(
+            Message::ConfirmDelete(path.clone(), DeleteAction::Permanent),
+        );
+
+        // Cancel button
+        let cancel_btn = button::text(fl!("delete-cancel")).on_press(Message::CloseDeleteDialog);
+
+        let button_row = cosmic::widget::row()
+            .push(trash_btn)
+            .push(delete_btn)
+            .spacing(spacing.space_s);
+
+        let content = column()
+            .push(text::title4(fl!("delete-dialog-title")))
+            .push(Space::with_height(Length::Fixed(spacing.space_xs as f32)))
+            .push(text::body(filename))
+            .push(Space::with_height(Length::Fixed(spacing.space_m as f32)))
+            .push(button_row)
+            .push(Space::with_height(Length::Fixed(spacing.space_s as f32)))
             .push(cancel_btn)
             .spacing(spacing.space_xxs)
             .align_x(cosmic::iced::Alignment::Center);
@@ -1229,7 +1329,7 @@ async fn set_wallpaper(path: &std::path::Path) -> Result<(), String> {
     }
 }
 
-/// Set wallpaper directly via COSMIC's config system
+// Set wallpaper directly via COSMIC's config system
 async fn set_wallpaper_cosmic(path: &std::path::Path) -> Result<(), String> {
     use std::io::Write;
 
@@ -1268,15 +1368,13 @@ async fn set_wallpaper_cosmic(path: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Check if running on COSMIC desktop
 fn is_cosmic_desktop() -> bool {
     std::env::var("XDG_CURRENT_DESKTOP")
         .map(|d| d.to_uppercase().contains("COSMIC"))
         .unwrap_or(false)
 }
 
-/// Get available outputs from cosmic-randr
-/// Returns output names (e.g., "eDP-1", "HDMI-A-1")
+// Get output names from cosmic-randr (e.g., "eDP-1", "HDMI-A-1")
 fn get_cosmic_outputs() -> Vec<String> {
     // Use cosmic-randr to get actual output names
     if let Ok(output) = std::process::Command::new("cosmic-randr")
@@ -1308,7 +1406,6 @@ fn get_cosmic_outputs() -> Vec<String> {
     Vec::new()
 }
 
-/// Strip ANSI escape codes from a string
 fn strip_ansi_codes(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
@@ -1334,8 +1431,7 @@ fn strip_ansi_codes(s: &str) -> String {
     result
 }
 
-/// Set wallpaper on COSMIC for a specific output (or all if None)
-/// - output: None means "all displays", Some("eDP-1") means specific output
+// Set wallpaper on COSMIC for a specific output (or all if None)
 async fn set_wallpaper_cosmic_on(
     path: &std::path::Path,
     output: Option<&str>,
@@ -1401,8 +1497,7 @@ async fn set_wallpaper_cosmic_on(
     Ok(())
 }
 
-/// Add an image to COSMIC Settings' custom-images list
-/// This ensures the image appears in COSMIC Settings -> Desktop -> Wallpaper
+// Add image to COSMIC Settings' custom-images so it shows up in the wallpaper picker
 fn add_to_cosmic_settings_custom_images(path: &std::path::Path) -> Result<(), String> {
     let config_dir = dirs::config_dir()
         .ok_or("Could not find config directory")?
@@ -1440,7 +1535,6 @@ fn add_to_cosmic_settings_custom_images(path: &std::path::Path) -> Result<(), St
     Ok(())
 }
 
-/// Parse a RON list of paths
 fn parse_path_list(content: &str) -> Option<Vec<PathBuf>> {
     let trimmed = content.trim();
     if trimmed.starts_with('[') && trimmed.ends_with(']') {
@@ -1463,7 +1557,6 @@ fn parse_path_list(content: &str) -> Option<Vec<PathBuf>> {
     }
 }
 
-/// Update the backgrounds list file to include an output
 fn update_backgrounds_list(config_dir: &std::path::Path, output_name: &str) -> Result<(), String> {
     let backgrounds_path = config_dir.join("backgrounds");
     let mut backgrounds: Vec<String> = std::fs::read_to_string(&backgrounds_path)
@@ -1488,7 +1581,6 @@ fn update_backgrounds_list(config_dir: &std::path::Path, output_name: &str) -> R
     Ok(())
 }
 
-/// Parse the backgrounds list from RON format
 fn parse_backgrounds_list(content: &str) -> Option<Vec<String>> {
     let trimmed = content.trim();
     if trimmed.starts_with('[') && trimmed.ends_with(']') {
@@ -1511,7 +1603,7 @@ fn parse_backgrounds_list(content: &str) -> Option<Vec<String>> {
     }
 }
 
-/// Update only the source field in an existing config, preserving other settings
+// Update only the source field, preserving other settings
 fn update_source_in_config(existing: &str, new_path: &str) -> String {
     let mut result = String::new();
     let mut skip_until_comma_or_paren = false;

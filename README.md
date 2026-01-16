@@ -94,13 +94,28 @@ cargo clippy            # Run linter
 The goal is to build a fast, private image manager that helps organize photo libraries through tags, locations, and smart detection without shipping photos to someone else's cloud. All ML-based features run locally using embedded models. No cloud AI, no third-party LLMs, nothing leaves your computer.
 
 ### In Progress
-- [ ] Set as wallpaper
-- [ ] Delete image with confirmation
+- [x] Set as wallpaper
+- [x] Custom Flex Grid Widget
+- [x] Theme switching
+- [x] Gallery keyboard navigation (arrow keys, Enter to select)
+- [x] Fix gallery scrolling to follow focus
+- [x] Refine scroll logic (smart scrolling) and fix geometry bugs
+- [x] Focus first image on load (without opening modal)
+- [x] Visual focus indicator on thumbnails
+- [x] Directory watching for external file changes
+- [x] Zoom controls with fit-to-window
+- [x] Thumbnail caching with configurable sizes
+- [x] Modal single-image view with navigation
+- [x] Settings page UI
+- [x] Slideshow in single view modal (not full implementation)
+- [x] Delete image with confirmation
+- [ ] Copy image to clipboard
+- [ ] Sort by name, date, size
+- [ ] Rotate 90/270 degrees
+- [ ] Flip horizontal/vertical
 
 ### Core Features
 - [ ] Slideshow with play/pause and timer controls
-- [ ] Copy image to clipboard
-- [ ] Sort by name, date, size
 - [ ] Filename search/filter
 - [ ] Zoom slider
 - [ ] Animated GIF playback
@@ -145,20 +160,7 @@ The goal is to build a fast, private image manager that helps organize photo lib
 - [ ] Privacy audit for sensitive metadata
 
 ### Completed
-- [x] Custom Flex Grid Widget
-- [x] Theme switching
-- [x] Gallery keyboard navigation (arrow keys, Enter to select)
-- [x] Fix gallery scrolling to follow focus
-- [x] Refine scroll logic (smart scrolling) and fix geometry bugs
-- [x] Focus first image on load (without opening modal)
-- [x] Visual focus indicator on thumbnails
-- [x] Directory watching for external file changes
-- [x] Zoom controls with fit-to-window
-- [x] Thumbnail caching with configurable sizes
-- [x] Modal single-image view with navigation
-- [x] Fullscreen mode
-- [x] Settings page UI
-- [x] Slideshow in single view modal (not full implementation)
+
 
 ## Contributing
 Contributions are welcome! Please feel free to submit issues and pull requests.

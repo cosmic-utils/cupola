@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-viewer"
-version = "0.1.10"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 authors = ["Bryan Hyland <bryan.hyland32@gmail.com>"]
@@ -39,6 +39,7 @@ rfd = "0.17.2"
 palette = "0.7.6"
 taffy = "0.9.2"
 ashpd = { version = "0.12.1", features = ["wayland"] }
+trash = "5.2.5"
 
 # Libcosmic
 [dependencies.libcosmic]

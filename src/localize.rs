@@ -1,5 +1,3 @@
-//! Internationalization support
-
 use i18n_embed::{
     DesktopLanguageRequester,
     fluent::{FluentLanguageLoader, fluent_language_loader},

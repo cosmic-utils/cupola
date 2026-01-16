@@ -5,15 +5,11 @@ use std::fmt;
 pub const CONFIG_VERSION: u64 = 1;
 const APP_ID: &str = "org.codeberg.bhh32.CosmicViewer";
 
-/// Wallpaper behavior for COSMIC desktop
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum WallpaperBehavior {
-    /// Always ask which display(s) to set
     #[default]
     Ask,
-    /// Set on all displays
     AllDisplays,
-    /// Set on current display only
     CurrentDisplay,
 }
 
@@ -31,7 +27,6 @@ impl fmt::Display for WallpaperBehavior {
     }
 }
 
-/// Thumbnail size presets
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ThumbnailSize {
     Small,
@@ -75,7 +70,6 @@ pub enum AppTheme {
 }
 
 impl AppTheme {
-    /// Get all available themes for dropdown
     pub const ALL: &'static [Self] = &[
         Self::System,
         Self::Dracula,
@@ -94,7 +88,6 @@ impl AppTheme {
         Self::GruvboxLight,
     ];
 
-    /// Check if the theme is a light theme
     fn is_light(self) -> bool {
         matches!(
             self,
@@ -182,30 +175,18 @@ impl fmt::Display for AppTheme {
     }
 }
 
-/// App config
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ViewerConfig {
-    /// Application theme
     pub app_theme: AppTheme,
-    /// Default zoom level (1.0 = 100%)
     pub default_zoom: f32,
-    /// Whether to fit images to window by default
     pub fit_to_window: bool,
-    /// Remember last opened directory
     pub remember_last_dir: bool,
-    /// Last opened directory path
     pub last_dir: Option<String>,
-    /// Slideshow interval in seconds
     pub slideshow_interval: u32,
-    /// Enable smooth image scaling
     pub smooth_scaling: bool,
-    /// Thumbnail size for gallery view
     pub thumbnail_size: ThumbnailSize,
-    /// Max cache in memory
     pub cache_size: usize,
-    /// Show hidden files in file browser
     pub show_hidden_files: bool,
-    /// Wallpaper behavior (COSMIC only)
     pub wallpaper_behavior: WallpaperBehavior,
 }
 
@@ -317,7 +298,6 @@ impl CosmicConfigEntry for ViewerConfig {
     }
 }
 
-/// Get or create the config handler
 pub fn config() -> Result<Config, cosmic_config::Error> {
     Config::new(APP_ID, CONFIG_VERSION)
 }

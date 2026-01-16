@@ -1,5 +1,3 @@
-//! Gallery view
-
 use crate::{
     fl,
     image::{CachedImage, ImageCache},
@@ -23,18 +21,12 @@ use cosmic::{
 };
 use std::path::PathBuf;
 
-/// Gallery view state
 #[derive(Debug, Clone, Default)]
 pub struct GalleryView {
-    /// Selected image indices
     pub selected: Vec<usize>,
-    /// Number of cols in the grid
     pub cols: usize,
-    /// Height of the rows in the grid
     pub row_height: f32,
-    /// Currently focused thumbnail index
     pub focused_index: Option<usize>,
-    /// Current viewport of the gallery scrollable
     pub viewport: Option<cosmic::iced::widget::scrollable::Viewport>,
 }
 
@@ -51,7 +43,6 @@ impl GalleryView {
         }
     }
 
-    /// Toggle selection of an image
     pub fn toggle_selection(&mut self, idx: usize) {
         if let Some(pos) = self.selected.iter().position(|&i| i == idx) {
             self.selected.remove(pos);
@@ -60,17 +51,14 @@ impl GalleryView {
         }
     }
 
-    /// Clear all selections
     pub fn clear_selection(&mut self) {
         self.selected.clear();
     }
 
-    /// Check if an index is selected
     pub fn is_selected(&self, idx: usize) -> bool {
         self.selected.contains(&idx)
     }
 
-    /// Create a thumbnail cell
     fn thumbnail_cell(
         &self,
         index: usize,
@@ -117,7 +105,6 @@ impl GalleryView {
         tooltip(cell, text(file_name), tooltip::Position::Bottom).into()
     }
 
-    /// Build the modal content for viewing a single image
     fn modal_content(
         &self,
         cached: &CachedImage,
@@ -293,7 +280,6 @@ impl GalleryView {
         .into()
     }
 
-    /// Render the gallery view
     pub fn view(
         &self,
         nav: &NavState,
