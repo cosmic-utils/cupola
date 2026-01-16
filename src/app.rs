@@ -192,14 +192,11 @@ impl ImageViewer {
 
         let row = index / cols;
         let spacing = theme::active().cosmic().spacing;
-        let thumbnail_size = self.config.thumbnail_size.pixels();
 
         // Gallery layout calculations
         let padding_top = spacing.space_s as f32;
         let row_spacing = spacing.space_xs as f32;
-        // Account for button padding (space_xxs) around content
-        let cell_padding = spacing.space_xxs as f32 * 2.0;
-        let row_height = thumbnail_size as f32 + cell_padding;
+        let row_height = self.gallery_view.row_height;
 
         let item_top = padding_top + (row as f32) * (row_height + row_spacing);
         let item_bottom = item_top + row_height;
@@ -699,7 +696,10 @@ impl Application for ImageViewer {
                 ViewMessage::GalleryScroll(viewport) => {
                     self.gallery_view.viewport = Some(viewport);
                 }
-                ViewMessage::GalleryColumnsChanged(cols) => self.gallery_view.cols = cols,
+                ViewMessage::GalleryColumnsChanged { cols, row_height } => {
+                    self.gallery_view.cols = cols;
+                    self.gallery_view.row_height = row_height;
+                }
                 ViewMessage::ImageEditEvent => {
                     // TODO: Add the image edit events
                 }

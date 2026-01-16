@@ -30,6 +30,8 @@ pub struct GalleryView {
     pub selected: Vec<usize>,
     /// Number of cols in the grid
     pub cols: usize,
+    /// Height of the rows in the grid
+    pub row_height: f32,
     /// Currently focused thumbnail index
     pub focused_index: Option<usize>,
     /// Current viewport of the gallery scrollable
@@ -43,6 +45,7 @@ impl GalleryView {
         Self {
             selected: Vec::new(),
             cols: 4,
+            row_height: 4.0,
             focused_index: None,
             viewport: None,
         }
@@ -326,7 +329,9 @@ impl GalleryView {
 
         let grid = flex_grid(cells)
             .item_width(item_width)
-            .on_columns_changed(|cols| Message::View(ViewMessage::GalleryColumnsChanged(cols)));
+            .on_layout_changed(|cols, row_height| {
+                Message::View(ViewMessage::GalleryColumnsChanged { cols, row_height })
+            });
 
         let content = scrollable(container(grid).padding(spacing.space_s).width(Length::Fill))
             .id(Id::new(Self::SCROLL_ID))

@@ -29,8 +29,8 @@ pub struct FlexGrid<'a, M> {
     item_width: f32,
     min_columns: usize,
     max_columns: Option<usize>,
-    last_columns: Cell<usize>,
-    on_columns_changed: Option<Box<dyn Fn(usize) -> M + 'a>>,
+    last_layout: Cell<(usize, f32)>,
+    on_layout_changed: Option<Box<dyn Fn(usize, f32) -> M + 'a>>, // (cols, row_height)
 }
 
 pub fn flex_grid<'a, M>(children: Vec<Element<'a, M>>) -> FlexGrid<'a, M> {
@@ -44,8 +44,8 @@ pub fn flex_grid<'a, M>(children: Vec<Element<'a, M>>) -> FlexGrid<'a, M> {
         item_width: 100.0,
         min_columns: 1,
         max_columns: None,
-        last_columns: Cell::new(0),
-        on_columns_changed: None,
+        last_layout: Cell::new((0, 0.0)),
+        on_layout_changed: None,
     }
 }
 
@@ -114,11 +114,11 @@ impl<'a, M> FlexGrid<'a, M> {
     }
 
     /// Update the columns on a resize event
-    pub fn on_columns_changed<F>(mut self, f: F) -> Self
+    pub fn on_layout_changed<F>(mut self, f: F) -> Self
     where
-        F: Fn(usize) -> M + 'a,
+        F: Fn(usize, f32) -> M + 'a,
     {
-        self.on_columns_changed = Some(Box::new(f));
+        self.on_layout_changed = Some(Box::new(f));
         self
     }
 }
@@ -278,11 +278,19 @@ impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for FlexGrid<'a,
         let available_width = layout.bounds().width - self.padding.horizontal();
         let cols = self.calculate_columns(available_width);
 
+        // Caculate row height from first child's layout
+        let row_height = layout
+            .children()
+            .next()
+            .map(|child| child.bounds().height)
+            .unwrap_or(0.0);
+
         // Fire callback if columns changed
-        if let Some(ref on_columns_changed) = self.on_columns_changed {
-            if cols != self.last_columns.get() {
-                self.last_columns.set(cols);
-                shell.publish((on_columns_changed)(cols));
+        if let Some(ref on_layout_changed) = self.on_layout_changed {
+            let current = (cols, row_height);
+            if current != self.last_layout.get() {
+                self.last_layout.set(current);
+                shell.publish((on_layout_changed)(cols, row_height));
             }
         }
 
