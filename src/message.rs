@@ -131,6 +131,8 @@ pub enum ViewMessage {
 
 #[derive(Debug, Clone)]
 pub enum SettingsMessage {
+    /// Change application theme
+    AppTheme(crate::config::AppTheme),
     /// Change default zoom level
     DefaultZoom(f32),
     /// Toggle fit to window

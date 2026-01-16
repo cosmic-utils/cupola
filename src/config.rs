@@ -25,9 +25,141 @@ impl ThumbnailSize {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum AppTheme {
+    #[default]
+    System,
+    // Dark themes
+    Dracula,
+    TokyoNight,
+    TokyoNightStorm,
+    KanagawaWave,
+    KanagawaDragon,
+    CatppuccinMocha,
+    CatppuccinMacchiato,
+    CatppuccinFrappe,
+    Nord,
+    GruvboxDark,
+    // Light themes
+    TokyoNightLight,
+    KanagawaLotus,
+    CatppuccinLatte,
+    GruvboxLight,
+}
+
+impl AppTheme {
+    /// Get all available themes for dropdown
+    pub const ALL: &'static [Self] = &[
+        Self::System,
+        Self::Dracula,
+        Self::TokyoNight,
+        Self::TokyoNightStorm,
+        Self::TokyoNightLight,
+        Self::KanagawaWave,
+        Self::KanagawaDragon,
+        Self::KanagawaLotus,
+        Self::CatppuccinMocha,
+        Self::CatppuccinMacchiato,
+        Self::CatppuccinFrappe,
+        Self::CatppuccinLatte,
+        Self::Nord,
+        Self::GruvboxDark,
+        Self::GruvboxLight,
+    ];
+
+    /// Check if the theme is a light theme
+    fn is_light(self) -> bool {
+        matches!(
+            self,
+            AppTheme::TokyoNightLight
+                | AppTheme::KanagawaLotus
+                | AppTheme::CatppuccinLatte
+                | AppTheme::GruvboxLight
+        )
+    }
+
+    pub fn to_cosmic_theme(self) -> cosmic::Theme {
+        use cosmic::cosmic_theme::ThemeBuilder;
+        use cosmic::iced_core::theme::Theme as IcedTheme;
+        use palette::{Srgb, Srgba};
+        use std::sync::Arc;
+
+        match self {
+            AppTheme::System => cosmic::theme::system_preference(),
+            other => {
+                // Map AppTheme to iced's built-in Theme
+                let iced_theme = match other {
+                    AppTheme::System => unreachable!(),
+                    AppTheme::Dracula => IcedTheme::Dracula,
+                    AppTheme::TokyoNight => IcedTheme::TokyoNight,
+                    AppTheme::TokyoNightStorm => IcedTheme::TokyoNightStorm,
+                    AppTheme::TokyoNightLight => IcedTheme::TokyoNightLight,
+                    AppTheme::KanagawaWave => IcedTheme::KanagawaWave,
+                    AppTheme::KanagawaDragon => IcedTheme::KanagawaDragon,
+                    AppTheme::KanagawaLotus => IcedTheme::KanagawaLotus,
+                    AppTheme::CatppuccinMocha => IcedTheme::CatppuccinMocha,
+                    AppTheme::CatppuccinMacchiato => IcedTheme::CatppuccinMacchiato,
+                    AppTheme::CatppuccinFrappe => IcedTheme::CatppuccinFrappe,
+                    AppTheme::CatppuccinLatte => IcedTheme::CatppuccinLatte,
+                    AppTheme::Nord => IcedTheme::Nord,
+                    AppTheme::GruvboxDark => IcedTheme::GruvboxDark,
+                    AppTheme::GruvboxLight => IcedTheme::GruvboxLight,
+                };
+
+                // Get the palette from iced theme
+                let palette = iced_theme.palette();
+
+                // Helper to convert iced Color to palette Srgba
+                let to_srgba = |c: cosmic::iced_core::Color| Srgba::new(c.r, c.g, c.b, c.a);
+                let to_srgb = |c: cosmic::iced_core::Color| Srgb::new(c.r, c.g, c.b);
+
+                // Use light or dark builder based on theme
+                let builder = if other.is_light() {
+                    ThemeBuilder::light()
+                } else {
+                    ThemeBuilder::dark()
+                };
+
+                let theme = builder
+                    .bg_color(to_srgba(palette.background))
+                    .accent(to_srgb(palette.primary))
+                    .success(to_srgb(palette.success))
+                    .destructive(to_srgb(palette.danger))
+                    .build();
+
+                cosmic::Theme::custom(Arc::new(theme))
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for AppTheme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppTheme::System => write!(f, "System"),
+            AppTheme::Dracula => write!(f, "Dracula"),
+            AppTheme::TokyoNight => write!(f, "Tokyo Night"),
+            AppTheme::TokyoNightStorm => write!(f, "Tokyo Night Storm"),
+            AppTheme::TokyoNightLight => write!(f, "Tokyo Night Light"),
+            AppTheme::KanagawaWave => write!(f, "Kanagawa Wave"),
+            AppTheme::KanagawaDragon => write!(f, "Kanagawa Dragon"),
+            AppTheme::KanagawaLotus => write!(f, "Kanagawa Lotus"),
+            AppTheme::CatppuccinMocha => write!(f, "Catppuccin Mocha"),
+            AppTheme::CatppuccinMacchiato => write!(f, "Catppuccin Macchiato"),
+            AppTheme::CatppuccinFrappe => write!(f, "Catppuccin Frappé"),
+            AppTheme::CatppuccinLatte => write!(f, "Catppuccin Latte"),
+            AppTheme::Nord => write!(f, "Nord"),
+            AppTheme::GruvboxDark => write!(f, "Gruvbox Dark"),
+            AppTheme::GruvboxLight => write!(f, "Gruvbox Light"),
+        }
+    }
+}
+
 /// App config
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ViewerConfig {
+    /// Application theme
+    pub app_theme: AppTheme,
     /// Default zoom level (1.0 = 100%)
     pub default_zoom: f32,
     /// Whether to fit images to window by default
@@ -51,6 +183,7 @@ pub struct ViewerConfig {
 impl Default for ViewerConfig {
     fn default() -> Self {
         Self {
+            app_theme: AppTheme::default(),
             default_zoom: 1.0,
             fit_to_window: true,
             remember_last_dir: true,
@@ -68,6 +201,7 @@ impl CosmicConfigEntry for ViewerConfig {
     const VERSION: u64 = CONFIG_VERSION;
 
     fn write_entry(&self, config: &cosmic_config::Config) -> Result<(), cosmic_config::Error> {
+        config.set("app_theme", self.app_theme)?;
         config.set("default_zoom", self.default_zoom)?;
         config.set("fit_to_window", self.fit_to_window)?;
         config.set("remember_last_dir", self.remember_last_dir)?;
@@ -95,6 +229,7 @@ impl CosmicConfigEntry for ViewerConfig {
             };
         }
 
+        get_field!("app_theme", app_theme, AppTheme);
         get_field!("default_zoom", default_zoom, f32);
         get_field!("fit_to_window", fit_to_window, bool);
         get_field!("remember_last_dir", remember_last_dir, bool);

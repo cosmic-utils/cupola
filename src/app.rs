@@ -1,7 +1,7 @@
 //! Main app state
 
 use crate::{
-    config::{ThumbnailSize, ViewerConfig},
+    config::{AppTheme, ThumbnailSize, ViewerConfig},
     fl,
     image::{self, CachedImage, ImageCache},
     key_binds::{self, MenuAction},
@@ -22,7 +22,7 @@ use cosmic::{
     task::future,
     theme,
     widget::{
-        Id, button, column,
+        Id, button, column, dropdown,
         menu::key_bind::{KeyBind, Modifier},
         radio, settings, slider, spin_button, text,
     },
@@ -350,6 +350,11 @@ impl Application for ImageViewer {
         };
 
         let startup_path = startup_path.or_else(dirs::picture_dir);
+
+        // Apply saved theme on startup
+        tasks.push(cosmic::command::set_theme(
+            app.config.app_theme.to_cosmic_theme(),
+        ));
 
         tasks.push(app.set_window_title(fl!("app-title"), app.core.main_window_id().unwrap()));
         if let Some(path) = startup_path {
@@ -700,6 +705,14 @@ impl Application for ImageViewer {
             },
             Message::Settings(msg) => {
                 match msg {
+                    SettingsMessage::AppTheme(theme) => {
+                        self.config.app_theme = theme;
+                        // Save config and apply theme
+                        if let Some(ref handler) = self.config_handler {
+                            let _ = self.config.write_entry(handler);
+                        }
+                        return cosmic::command::set_theme(theme.to_cosmic_theme());
+                    }
                     SettingsMessage::DefaultZoom(zoom) => self.config.default_zoom = zoom,
                     SettingsMessage::FitToWindow(fit) => self.config.fit_to_window = fit,
                     SettingsMessage::SmoothScaling(smooth) => self.config.smooth_scaling = smooth,
@@ -940,7 +953,16 @@ impl ImageViewer {
                 .title(fl!("settings-appearance"))
                 .add(settings::item(
                     fl!("settings-theme"),
-                    text::body(fl!("settings-theme-system")),
+                    dropdown(
+                        AppTheme::ALL
+                            .iter()
+                            .map(|t| t.to_string())
+                            .collect::<Vec<_>>(),
+                        AppTheme::ALL
+                            .iter()
+                            .position(|t| *t == self.config.app_theme),
+                        |idx| Message::Settings(SettingsMessage::AppTheme(AppTheme::ALL[idx])),
+                    ),
                 ))
                 .into(),
             // View settings section
