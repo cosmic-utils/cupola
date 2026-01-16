@@ -316,6 +316,9 @@ dependencies = [
  "serde_repr",
  "tokio",
  "url",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
  "zbus 5.13.1",
 ]
 
@@ -1237,6 +1240,7 @@ dependencies = [
 name = "cosmic-viewer"
 version = "0.1.10"
 dependencies = [
+ "ashpd 0.12.1",
  "dirs",
  "fast_image_resize",
  "i18n-embed",

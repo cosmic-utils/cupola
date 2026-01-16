@@ -33,6 +33,12 @@ pub fn menu_bar<'a>(
                         menu::Item::Button(fl!("menu-open"), None, MenuAction::Open),
                         menu::Item::Button(fl!("menu-open-folder"), None, MenuAction::OpenFolder),
                         menu::Item::Divider,
+                        menu::Item::Button(
+                            fl!("menu-set-wallpaper"),
+                            None,
+                            MenuAction::SetWallpaper,
+                        ),
+                        menu::Item::Divider,
                         menu::Item::Button(fl!("menu-settings"), None, MenuAction::Settings),
                         menu::Item::Divider,
                         menu::Item::Button(fl!("menu-quit"), None, MenuAction::Quit),

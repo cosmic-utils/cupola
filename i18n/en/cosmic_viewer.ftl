@@ -7,6 +7,7 @@ app-description = An image viewer made for COSMIC, but can be used anywhere.
 menu-file = File
 menu-open = Open
 menu-open-folder = Open Folder
+menu-set-wallpaper = Set as Wallpaper
 menu-settings = Settings
 menu-quit = Quit
 
@@ -68,6 +69,8 @@ settings-performance = Performance
 settings-cache-size = Image Cache Size
 settings-directory = Directory Settings
 settings-remember-dir = Remember Last Directory
+settings-wallpaper = Wallpaper Settings
+settings-wallpaper-behavior = When setting wallpaper
 
 # Status
 status-loading = Loading...
@@ -83,6 +86,11 @@ error-file-not-found = File not found
 # Dialog
 dialog-open-title = Open Image
 dialog-open-folder-title = Open Folder
+
+# Wallpaper Dialog
+wallpaper-dialog-title = Set Wallpaper On
+wallpaper-all-displays = All Displays
+wallpaper-cancel = Cancel
 
 # About
 about-repo = Repository

@@ -1,7 +1,7 @@
 //! Main app state
 
 use crate::{
-    config::{AppTheme, ThumbnailSize, ViewerConfig},
+    config::{AppTheme, ThumbnailSize, ViewerConfig, WallpaperBehavior},
     fl,
     image::{self, CachedImage, ImageCache},
     key_binds::{self, MenuAction},
@@ -9,6 +9,10 @@ use crate::{
     nav::{self, EXTENSIONS, NavState},
     views::{GalleryView, ImageViewState},
     watcher,
+};
+use ashpd::{
+    desktop::wallpaper::{SetOn, WallpaperRequest},
+    url::Url,
 };
 use cosmic::{
     Action, Application, ApplicationExt, Core, Element, Task,
@@ -43,6 +47,10 @@ pub struct ImageViewer {
     is_loading: bool,
     is_fullscreen: bool,
     is_slideshow_active: bool,
+    /// Path for pending wallpaper dialog (COSMIC only)
+    wallpaper_dialog: Option<PathBuf>,
+    /// Available outputs for wallpaper (COSMIC only)
+    available_outputs: Vec<String>,
 }
 
 impl ImageViewer {
@@ -272,6 +280,8 @@ impl Application for ImageViewer {
             is_loading: false,
             is_fullscreen: false,
             is_slideshow_active: false,
+            wallpaper_dialog: None,
+            available_outputs: Vec::new(),
         };
 
         let startup_path = if let Some(path) = flags {
@@ -302,12 +312,32 @@ impl Application for ImageViewer {
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
-        self.gallery_view.view(
+        let gallery = self.gallery_view.view(
             &self.nav,
             &self.cache,
             self.config.thumbnail_size.pixels(),
             &self.image_state,
-        )
+        );
+
+        // Overlay wallpaper dialog if active
+        if let Some(path) = &self.wallpaper_dialog {
+            let dialog = self.wallpaper_dialog_view(path);
+
+            let backdrop = cosmic::widget::mouse_area(
+                cosmic::widget::container(cosmic::widget::Space::new(
+                    cosmic::iced::Length::Fill,
+                    cosmic::iced::Length::Fill,
+                ))
+                .width(cosmic::iced::Length::Fill)
+                .height(cosmic::iced::Length::Fill)
+                .class(cosmic::theme::Container::Transparent),
+            )
+            .on_press(Message::CloseWallpaperDialog);
+
+            cosmic::iced_widget::stack![gallery, backdrop, dialog].into()
+        } else {
+            gallery
+        }
     }
 
     fn update(&mut self, message: Message) -> Task<Action<Self::Message>> {
@@ -672,6 +702,9 @@ impl Application for ImageViewer {
                     SettingsMessage::RememberLastDir(remem) => {
                         self.config.remember_last_dir = remem
                     }
+                    SettingsMessage::WallpaperBehavior(behavior) => {
+                        self.config.wallpaper_behavior = behavior
+                    }
                 }
 
                 // Save config changes
@@ -793,6 +826,73 @@ impl Application for ImageViewer {
                     }
                 }
             }
+            Message::SetWallpaper => {
+                // Try current selected image (modal view), then focused gallery thumbnail
+                let path = self.nav.current().cloned().or_else(|| {
+                    self.gallery_view
+                        .focused_index
+                        .and_then(|idx| self.nav.images().get(idx).cloned())
+                });
+
+                if let Some(path) = path {
+                    // On COSMIC, check the wallpaper behavior setting
+                    if is_cosmic_desktop() {
+                        match self.config.wallpaper_behavior {
+                            WallpaperBehavior::Ask => {
+                                // Fetch available outputs and show dialog
+                                self.available_outputs = get_cosmic_outputs();
+                                self.wallpaper_dialog = Some(path);
+                            }
+                            WallpaperBehavior::AllDisplays => {
+                                return cosmic::task::future(async move {
+                                    let result = set_wallpaper_cosmic_on(&path, None).await;
+                                    Message::WallpaperResult(result)
+                                });
+                            }
+                            WallpaperBehavior::CurrentDisplay => {
+                                // For "current display", we use the focused output
+                                // Since we can't easily detect it, default to first output
+                                let outputs = get_cosmic_outputs();
+                                let output = outputs.first().cloned();
+                                return cosmic::task::future(async move {
+                                    let result =
+                                        set_wallpaper_cosmic_on(&path, output.as_deref()).await;
+                                    Message::WallpaperResult(result)
+                                });
+                            }
+                        }
+                    } else {
+                        // Non-COSMIC: use XDG portal
+                        return cosmic::task::future(async move {
+                            let result = set_wallpaper(&path).await;
+                            Message::WallpaperResult(result)
+                        });
+                    }
+                }
+            }
+            Message::ShowWallpaperDialog(path) => {
+                self.available_outputs = get_cosmic_outputs();
+                self.wallpaper_dialog = Some(path);
+            }
+            Message::SetWallpaperOn(path, target) => {
+                self.wallpaper_dialog = None;
+                let output = match target {
+                    crate::message::WallpaperTarget::All => None,
+                    crate::message::WallpaperTarget::Output(name) => Some(name),
+                };
+                return cosmic::task::future(async move {
+                    let result = set_wallpaper_cosmic_on(&path, output.as_deref()).await;
+                    Message::WallpaperResult(result)
+                });
+            }
+            Message::CloseWallpaperDialog => {
+                self.wallpaper_dialog = None;
+            }
+            Message::WallpaperResult(result) => {
+                if let Err(err) = result {
+                    tracing::error!("Failed to set wallpaper: {}", err);
+                }
+            }
             Message::Quit => {
                 std::process::exit(0);
             }
@@ -869,10 +969,67 @@ impl ImageViewer {
             .into()
     }
 
+    fn wallpaper_dialog_view(&self, path: &PathBuf) -> Element<'_, Message> {
+        use crate::message::WallpaperTarget;
+        use cosmic::iced::Length;
+        use cosmic::widget::{Space, container};
+
+        let spacing = cosmic::theme::active().cosmic().spacing;
+
+        // Build buttons for each output option
+        let mut button_col = column().spacing(spacing.space_s);
+
+        // "All Displays" button
+        let all_btn = button::standard(fl!("wallpaper-all-displays"))
+            .on_press(Message::SetWallpaperOn(path.clone(), WallpaperTarget::All));
+        button_col = button_col.push(all_btn);
+
+        // Individual output buttons (skip "all" since we have a dedicated button)
+        for output in &self.available_outputs {
+            if output == "all" {
+                continue;
+            }
+            let output_btn = button::standard(output.clone()).on_press(Message::SetWallpaperOn(
+                path.clone(),
+                WallpaperTarget::Output(output.clone()),
+            ));
+            button_col = button_col.push(output_btn);
+        }
+
+        // Cancel button
+        let cancel_btn =
+            button::text(fl!("wallpaper-cancel")).on_press(Message::CloseWallpaperDialog);
+
+        let content = column()
+            .push(text::title4(fl!("wallpaper-dialog-title")))
+            .push(Space::with_height(Length::Fixed(spacing.space_s as f32)))
+            .push(button_col)
+            .push(Space::with_height(Length::Fixed(spacing.space_m as f32)))
+            .push(cancel_btn)
+            .spacing(spacing.space_xxs)
+            .align_x(cosmic::iced::Alignment::Center);
+
+        let dialog_container = container(content)
+            .padding(spacing.space_m)
+            .class(cosmic::theme::Container::Dialog);
+
+        // Center the dialog on screen
+        container(
+            container(dialog_container)
+                .width(Length::Shrink)
+                .height(Length::Shrink),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(cosmic::iced::alignment::Horizontal::Center)
+        .align_y(cosmic::iced::alignment::Vertical::Center)
+        .into()
+    }
+
     fn settings_page(&self) -> Element<'_, Message> {
         let spacing = cosmic::theme::active().cosmic().spacing;
 
-        settings::view_column(vec![
+        let mut sections = vec![
             // Appearance section
             settings::section()
                 .title(fl!("settings-appearance"))
@@ -993,8 +1150,35 @@ impl ImageViewer {
                     }),
                 ))
                 .into(),
-        ])
-        .into()
+        ];
+
+        // Add COSMIC-specific wallpaper settings if on COSMIC desktop
+        if is_cosmic_desktop() {
+            sections.push(
+                settings::section()
+                    .title(fl!("settings-wallpaper"))
+                    .add(settings::item(
+                        fl!("settings-wallpaper-behavior"),
+                        dropdown(
+                            WallpaperBehavior::ALL
+                                .iter()
+                                .map(|b| b.to_string())
+                                .collect::<Vec<_>>(),
+                            WallpaperBehavior::ALL
+                                .iter()
+                                .position(|b| *b == self.config.wallpaper_behavior),
+                            |idx| {
+                                Message::Settings(SettingsMessage::WallpaperBehavior(
+                                    WallpaperBehavior::ALL[idx],
+                                ))
+                            },
+                        ),
+                    ))
+                    .into(),
+            );
+        }
+
+        settings::view_column(sections).into()
     }
 
     fn image_info_page(&self) -> Element<'_, Message> {
@@ -1021,6 +1205,175 @@ impl ImageViewer {
 
         content.into()
     }
+}
+
+async fn set_wallpaper(path: &std::path::Path) -> Result<(), String> {
+    // Try XDG portal first (works on GNOME, KDE, and eventually COSMIC)
+    let uri = Url::from_file_path(path).map_err(|()| "Invalid file path".to_string())?;
+
+    let portal_result = WallpaperRequest::default()
+        .set_on(SetOn::Both)
+        .show_preview(true)
+        .build_uri(&uri)
+        .await;
+
+    match portal_result {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            // Check if we're on COSMIC and the portal isn't available
+            let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+            if desktop.to_uppercase().contains("COSMIC") {
+                // Fall back to COSMIC-specific method
+                set_wallpaper_cosmic(path).await
+            } else {
+                Err(e.to_string())
+            }
+        }
+    }
+}
+
+/// Set wallpaper directly via COSMIC's config system
+async fn set_wallpaper_cosmic(path: &std::path::Path) -> Result<(), String> {
+    use std::io::Write;
+
+    // COSMIC stores the "all" wallpaper config in ~/.config/cosmic/com.system76.CosmicBackground/v1/all
+    let config_dir = dirs::config_dir()
+        .ok_or("Could not find config directory")?
+        .join("cosmic/com.system76.CosmicBackground/v1");
+
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("Failed to create config directory: {}", e))?;
+
+    let all_path = config_dir.join("all");
+    let path_str = path.to_string_lossy();
+
+    // Build the Entry config in RON format
+    let content = format!(
+        r#"(
+    output: "all",
+    source: Path("{}"),
+    filter_by_theme: false,
+    rotation_frequency: 0,
+    filter_method: Lanczos,
+    scaling_mode: Zoom,
+    sampling_method: Alphanumeric,
+)
+"#,
+        path_str
+    );
+
+    let mut file = std::fs::File::create(&all_path)
+        .map_err(|e| format!("Failed to create config file: {}", e))?;
+
+    file.write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write config file: {}", e))?;
+
+    Ok(())
+}
+
+/// Check if running on COSMIC desktop
+fn is_cosmic_desktop() -> bool {
+    std::env::var("XDG_CURRENT_DESKTOP")
+        .map(|d| d.to_uppercase().contains("COSMIC"))
+        .unwrap_or(false)
+}
+
+/// Get available outputs from COSMIC background config
+fn get_cosmic_outputs() -> Vec<String> {
+    let config_dir = match dirs::config_dir() {
+        Some(dir) => dir.join("cosmic/com.system76.CosmicBackground/v1"),
+        None => return vec!["all".to_string()],
+    };
+
+    // Read the outputs file which lists available displays
+    let outputs_path = config_dir.join("outputs");
+    if let Ok(content) = std::fs::read_to_string(&outputs_path) {
+        // Parse RON format - it's a list like ["DP-1", "HDMI-1"]
+        let trimmed = content.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            let inner = &trimmed[1..trimmed.len() - 1];
+            let outputs: Vec<String> = inner
+                .split(',')
+                .filter_map(|s| {
+                    let s = s.trim().trim_matches('"');
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(s.to_string())
+                    }
+                })
+                .collect();
+            if !outputs.is_empty() {
+                return outputs;
+            }
+        }
+    }
+
+    // Fallback: scan for output-specific config files
+    if let Ok(entries) = std::fs::read_dir(&config_dir) {
+        let outputs: Vec<String> = entries
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                // Skip known non-output files
+                if name == "all"
+                    || name == "outputs"
+                    || name == "same-on-all"
+                    || name.starts_with('.')
+                {
+                    None
+                } else {
+                    Some(name)
+                }
+            })
+            .collect();
+        if !outputs.is_empty() {
+            return outputs;
+        }
+    }
+
+    vec!["all".to_string()]
+}
+
+/// Set wallpaper on COSMIC for a specific output (or all if None)
+async fn set_wallpaper_cosmic_on(
+    path: &std::path::Path,
+    output: Option<&str>,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    let config_dir = dirs::config_dir()
+        .ok_or("Could not find config directory")?
+        .join("cosmic/com.system76.CosmicBackground/v1");
+
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("Failed to create config directory: {}", e))?;
+
+    let output_name = output.unwrap_or("all");
+    let config_path = config_dir.join(output_name);
+    let path_str = path.to_string_lossy();
+
+    let content = format!(
+        r#"(
+    output: "{}",
+    source: Path("{}"),
+    filter_by_theme: false,
+    rotation_frequency: 0,
+    filter_method: Lanczos,
+    scaling_mode: Zoom,
+    sampling_method: Alphanumeric,
+)
+"#,
+        output_name, path_str
+    );
+
+    let mut file = std::fs::File::create(&config_path)
+        .map_err(|e| format!("Failed to create config file: {}", e))?;
+
+    file.write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write config file: {}", e))?;
+
+    Ok(())
 }
 
 fn key_press_handler(key: Key, modifiers: Modifiers) -> Option<Message> {

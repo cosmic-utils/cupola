@@ -33,6 +33,7 @@ pub enum MenuAction {
     FocusDown,
     SelectFocused,
     ToggleSlideshow,
+    SetWallpaper,
 }
 
 impl MenuAction {
@@ -59,6 +60,7 @@ impl MenuAction {
             MenuAction::FocusDown => Message::View(ViewMessage::FocusDown),
             MenuAction::SelectFocused => Message::View(ViewMessage::SelectFocused),
             MenuAction::ToggleSlideshow => Message::View(ViewMessage::ToggleSlideshow),
+            MenuAction::SetWallpaper => Message::SetWallpaper,
         }
     }
 }
@@ -228,6 +230,15 @@ pub fn init_key_binds() -> HashMap<KeyBind, MenuAction> {
             key: Key::Character("i".into()),
         },
         MenuAction::ImageInfo,
+    );
+
+    // Set wallpaper
+    binds.insert(
+        KeyBind {
+            modifiers: vec![Modifier::Ctrl, Modifier::Shift],
+            key: Key::Character("w".into()),
+        },
+        MenuAction::SetWallpaper,
     );
 
     binds

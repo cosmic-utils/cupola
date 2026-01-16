@@ -1,8 +1,35 @@
 use cosmic::cosmic_config::{self, Config, ConfigGet, ConfigSet, CosmicConfigEntry};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 pub const CONFIG_VERSION: u64 = 1;
 const APP_ID: &str = "org.codeberg.bhh32.CosmicViewer";
+
+/// Wallpaper behavior for COSMIC desktop
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum WallpaperBehavior {
+    /// Always ask which display(s) to set
+    #[default]
+    Ask,
+    /// Set on all displays
+    AllDisplays,
+    /// Set on current display only
+    CurrentDisplay,
+}
+
+impl WallpaperBehavior {
+    pub const ALL: &'static [Self] = &[Self::Ask, Self::AllDisplays, Self::CurrentDisplay];
+}
+
+impl fmt::Display for WallpaperBehavior {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WallpaperBehavior::Ask => write!(f, "Always Ask"),
+            WallpaperBehavior::AllDisplays => write!(f, "All Displays"),
+            WallpaperBehavior::CurrentDisplay => write!(f, "Current Display"),
+        }
+    }
+}
 
 /// Thumbnail size presets
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -133,8 +160,8 @@ impl AppTheme {
     }
 }
 
-impl std::fmt::Display for AppTheme {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for AppTheme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AppTheme::System => write!(f, "System"),
             AppTheme::Dracula => write!(f, "Dracula"),
@@ -178,6 +205,8 @@ pub struct ViewerConfig {
     pub cache_size: usize,
     /// Show hidden files in file browser
     pub show_hidden_files: bool,
+    /// Wallpaper behavior (COSMIC only)
+    pub wallpaper_behavior: WallpaperBehavior,
 }
 
 impl Default for ViewerConfig {
@@ -193,6 +222,7 @@ impl Default for ViewerConfig {
             thumbnail_size: ThumbnailSize::default(),
             cache_size: 20,
             show_hidden_files: false,
+            wallpaper_behavior: WallpaperBehavior::default(),
         }
     }
 }
@@ -211,6 +241,7 @@ impl CosmicConfigEntry for ViewerConfig {
         config.set("thumbnail_size", self.thumbnail_size)?;
         config.set("cache_size", self.cache_size)?;
         config.set("show_hidden_files", self.show_hidden_files)?;
+        config.set("wallpaper_behavior", self.wallpaper_behavior)?;
         Ok(())
     }
 
@@ -238,6 +269,7 @@ impl CosmicConfigEntry for ViewerConfig {
         get_field!("thumbnail_size", thumbnail_size, ThumbnailSize);
         get_field!("cache_size", cache_size, usize);
         get_field!("show_hidden_files", show_hidden_files, bool);
+        get_field!("wallpaper_behavior", wallpaper_behavior, WallpaperBehavior);
 
         if errors.is_empty() {
             Ok(cfg)

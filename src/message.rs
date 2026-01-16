@@ -4,6 +4,15 @@ use std::{path::PathBuf, sync::Arc};
 /// Menu action type alias (re-exported from key_binds module)
 pub use crate::key_binds::MenuAction;
 
+/// Target for wallpaper setting (COSMIC only)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WallpaperTarget {
+    /// Set on all displays
+    All,
+    /// Set on a specific output
+    Output(String),
+}
+
 /// Context drawer pages
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContextPage {
@@ -50,6 +59,16 @@ pub enum Message {
     },
     /// Slideshow timer tick
     SlideshowTick,
+    /// Set current image as wallpaper
+    SetWallpaper,
+    /// Show wallpaper display selection dialog (COSMIC only)
+    ShowWallpaperDialog(std::path::PathBuf),
+    /// Set wallpaper on specific target
+    SetWallpaperOn(std::path::PathBuf, WallpaperTarget),
+    /// Close wallpaper dialog
+    CloseWallpaperDialog,
+    /// Wallpaper set result
+    WallpaperResult(Result<(), String>),
     /// Quit the application
     Quit,
     Surface(cosmic::surface::Action),
@@ -155,4 +174,6 @@ pub enum SettingsMessage {
     CacheSize(usize),
     /// Toggle remember last directory
     RememberLastDir(bool),
+    /// Change wallpaper behavior (COSMIC only)
+    WallpaperBehavior(crate::config::WallpaperBehavior),
 }
