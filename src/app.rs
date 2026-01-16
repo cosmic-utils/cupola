@@ -1285,7 +1285,9 @@ fn get_cosmic_outputs() -> Vec<String> {
     {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            let outputs: Vec<String> = stdout
+            // Strip ANSI escape codes
+            let stripped = strip_ansi_codes(&stdout);
+            let outputs: Vec<String> = stripped
                 .lines()
                 .filter_map(|line| {
                     // Lines like "HDMI-A-1 (enabled)" or "eDP-1 (enabled)"
@@ -1304,6 +1306,32 @@ fn get_cosmic_outputs() -> Vec<String> {
     }
 
     Vec::new()
+}
+
+/// Strip ANSI escape codes from a string
+fn strip_ansi_codes(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip escape sequence
+            if chars.peek() == Some(&'[') {
+                chars.next(); // consume '['
+                // Skip until we hit a letter (end of escape sequence)
+                while let Some(&next) = chars.peek() {
+                    chars.next();
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
 }
 
 /// Set wallpaper on COSMIC for a specific output (or all if None)
