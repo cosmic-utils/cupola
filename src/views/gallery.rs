@@ -327,17 +327,22 @@ impl GalleryView {
 
         let item_width = thumbnail_size as f32 + (spacing.space_xxs * 2) as f32;
 
-        let grid = flex_grid(cells)
+        let content = flex_grid(cells)
             .item_width(item_width)
-            .on_layout_changed(|cols, row_height| {
-                Message::View(ViewMessage::GalleryColumnsChanged { cols, row_height })
-            });
-
-        let content = scrollable(container(grid).padding(spacing.space_s).width(Length::Fill))
-            .id(Id::new(Self::SCROLL_ID))
+            .column_spacing(spacing.space_xs)
+            .row_spacing(spacing.space_xs)
+            .padding(spacing.space_s)
+            .scrollable(Id::new(Self::SCROLL_ID))
+            .scroll_to_item(self.focused_index.unwrap_or(0))
             .on_scroll(|vp| Message::View(ViewMessage::GalleryScroll(vp)))
-            .width(Length::Fill)
-            .height(Length::Fill);
+            .on_layout_changed(|cols, row_height, scroll_request| {
+                Message::View(ViewMessage::GalleryLayoutChanged {
+                    cols,
+                    row_height,
+                    scroll_request,
+                })
+            })
+            .into_element();
 
         // Status bar
         let status = row()

@@ -127,8 +127,12 @@ pub enum ViewMessage {
     ImageEditEvent,
     /// Gallery scroll update
     GalleryScroll(cosmic::iced::widget::scrollable::Viewport),
-    /// Let gallery columns know of a resize event
-    GalleryColumnsChanged { cols: usize, row_height: f32 },
+    /// Gallery layout changed - includes optional scroll request
+    GalleryLayoutChanged {
+        cols: usize,
+        row_height: f32,
+        scroll_request: Option<crate::widgets::ScrollRequest>,
+    },
 }
 
 #[derive(Debug, Clone)]

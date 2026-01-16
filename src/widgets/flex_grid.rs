@@ -1,3 +1,17 @@
+//! FlexGrid widget - A responsive CSS Grid layout with optional integrated scrolling
+//!
+//! # Example
+//! ```rust
+//! flex_grid(cells)
+//!     .item_width(100.0)
+//!     .spacing(8)
+//!     .scrollable(Id::new("my-grid"))
+//!     .scroll_to_item(focused_index)
+//!     .on_scroll(|vp| Message::Scroll(vp))
+//!     .on_layout_changed(|cols, row_height| Message::LayoutChanged(cols, row_height))
+//!     .into_element()
+//! ```
+
 use std::{cell::Cell, f32};
 
 use cosmic::{
@@ -8,17 +22,28 @@ use cosmic::{
             Clipboard, Layout, Shell, Widget,
             layout::{Limits, Node},
             overlay, renderer as iced_renderer,
-            widget::{Operation, Tree},
+            widget::{Id, Operation, Tree},
         },
         event::{self, Event},
         mouse::{self, Cursor},
+        widget::scrollable::Viewport,
     },
+    widget::{container, scrollable},
 };
 use taffy::{
     Dimension, Display, GridPlacement, JustifyItems, LengthPercentage, Size as TaffySize, Style,
     TaffyTree, prelude::fr,
 };
 
+/// Scroll request calculated by FlexGrid
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScrollRequest {
+    pub offset_y: f32,
+}
+
+/// A responsive grid layout builder that can optionally include scrolling.
+///
+/// Use `into_element()` to build the final widget.
 pub struct FlexGrid<'a, M> {
     children: Vec<Element<'a, M>>,
     padding: Padding,
@@ -29,75 +54,190 @@ pub struct FlexGrid<'a, M> {
     item_width: f32,
     min_columns: usize,
     max_columns: Option<usize>,
-    last_layout: Cell<(usize, f32)>,
-    on_layout_changed: Option<Box<dyn Fn(usize, f32) -> M + 'a>>, // (cols, row_height)
+
+    // Scrolling support
+    scrollable_id: Option<Id>,
+    scroll_to_index: Option<usize>,
+    on_scroll: Option<Box<dyn Fn(Viewport) -> M + 'a>>,
+
+    // Layout reporting - now includes optional scroll request
+    on_layout_changed: Option<Box<dyn Fn(usize, f32, Option<ScrollRequest>) -> M + 'a>>,
 }
 
+/// Creates a new FlexGrid builder with the given children.
 pub fn flex_grid<'a, M>(children: Vec<Element<'a, M>>) -> FlexGrid<'a, M> {
     FlexGrid {
         children,
         padding: Padding::ZERO,
         column_spacing: 0,
         row_spacing: 0,
-        width: Length::Shrink,
+        width: Length::Fill,
         height: Length::Shrink,
         item_width: 100.0,
         min_columns: 1,
         max_columns: None,
-        last_layout: Cell::new((0, 0.0)),
+        scrollable_id: None,
+        scroll_to_index: None,
+        on_scroll: None,
         on_layout_changed: None,
     }
 }
 
 impl<'a, M> FlexGrid<'a, M> {
+    /// Sets the width of each item in the grid.
     pub fn item_width(mut self, width: f32) -> Self {
         self.item_width = width;
         self
     }
 
+    /// Sets the horizontal spacing between columns.
     pub fn column_spacing(mut self, spacing: u16) -> Self {
         self.column_spacing = spacing;
         self
     }
 
+    /// Sets the vertical spacing between rows.
     pub fn row_spacing(mut self, spacing: u16) -> Self {
         self.row_spacing = spacing;
         self
     }
 
+    /// Sets both column and row spacing.
     pub fn spacing(mut self, spacing: u16) -> Self {
         self.column_spacing = spacing;
         self.row_spacing = spacing;
         self
     }
 
+    /// Sets the minimum number of columns.
     pub fn min_columns(mut self, min: usize) -> Self {
         self.min_columns = min.max(1);
         self
     }
 
+    /// Sets the maximum number of columns.
     pub fn max_columns(mut self, max: usize) -> Self {
         self.max_columns = Some(max);
         self
     }
 
+    /// Sets the padding around the grid content.
     pub fn padding(mut self, padding: impl Into<Padding>) -> Self {
         self.padding = padding.into();
         self
     }
 
+    /// Sets the width of the grid.
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.width = width.into();
         self
     }
 
+    /// Sets the height of the grid.
     pub fn height(mut self, height: impl Into<Length>) -> Self {
         self.height = height.into();
         self
     }
 
+    /// Enables scrolling with the given ID.
+    ///
+    /// When enabled, the grid will be wrapped in a scrollable container.
+    pub fn scrollable(mut self, id: Id) -> Self {
+        self.scrollable_id = Some(id);
+        self
+    }
+
+    /// Scrolls to make the item at the given index visible.
+    ///
+    /// Requires `scrollable()` to be set. The scroll position will be
+    /// reported via `on_layout_changed` callback.
+    pub fn scroll_to_item(mut self, index: usize) -> Self {
+        self.scroll_to_index = Some(index);
+        self
+    }
+
+    /// Sets a callback for scroll events.
+    ///
+    /// Requires `scrollable()` to be set.
+    pub fn on_scroll<F>(mut self, f: F) -> Self
+    where
+        F: Fn(Viewport) -> M + 'a,
+    {
+        self.on_scroll = Some(Box::new(f));
+        self
+    }
+
+    /// Sets a callback that fires when the layout changes.
+    ///
+    /// Reports (columns, row_height, scroll_request) whenever layout changes
+    /// or a scroll is needed. The caller should issue the scroll command
+    /// if scroll_request is Some.
+    pub fn on_layout_changed<F>(mut self, f: F) -> Self
+    where
+        F: Fn(usize, f32, Option<ScrollRequest>) -> M + 'a,
+    {
+        self.on_layout_changed = Some(Box::new(f));
+        self
+    }
+
+    /// Builds the final element.
+    ///
+    /// If `scrollable()` was called, wraps the grid in a scrollable container.
+    pub fn into_element(self) -> Element<'a, M>
+    where
+        M: Clone + 'static,
+    {
+        let inner = FlexGridInner {
+            children: self.children,
+            padding: self.padding,
+            column_spacing: self.column_spacing,
+            row_spacing: self.row_spacing,
+            width: self.width,
+            height: self.height,
+            item_width: self.item_width,
+            min_columns: self.min_columns,
+            max_columns: self.max_columns,
+            on_layout_changed: self.on_layout_changed,
+            last_layout: Cell::new((0, 0)),
+            scroll_to_index: self.scroll_to_index,
+        };
+
+        if let Some(id) = self.scrollable_id {
+            let mut scroll = scrollable(container(inner).width(Length::Fill))
+                .id(id)
+                .width(Length::Fill)
+                .height(Length::Fill);
+
+            if let Some(on_scroll) = self.on_scroll {
+                scroll = scroll.on_scroll(on_scroll);
+            }
+
+            scroll.into()
+        } else {
+            inner.into()
+        }
+    }
+}
+
+/// The inner widget that implements the actual grid layout.
+struct FlexGridInner<'a, M> {
+    children: Vec<Element<'a, M>>,
+    padding: Padding,
+    column_spacing: u16,
+    row_spacing: u16,
+    width: Length,
+    height: Length,
+    item_width: f32,
+    min_columns: usize,
+    max_columns: Option<usize>,
+    on_layout_changed: Option<Box<dyn Fn(usize, f32, Option<ScrollRequest>) -> M + 'a>>,
+    last_layout: Cell<(usize, u32)>, // (cols, row_height as bits)
+    scroll_to_index: Option<usize>,
+}
+
+impl<'a, M> FlexGridInner<'a, M> {
     /// Calculate column count for a given available width
-    pub fn calculate_columns(&self, available_width: f32) -> usize {
+    fn calculate_columns(&self, available_width: f32) -> usize {
         let spacing = self.column_spacing as f32;
         let item_width = self.item_width;
 
@@ -112,18 +252,9 @@ impl<'a, M> FlexGrid<'a, M> {
             .min(self.children.len())
             .max(1)
     }
-
-    /// Update the columns on a resize event
-    pub fn on_layout_changed<F>(mut self, f: F) -> Self
-    where
-        F: Fn(usize, f32) -> M + 'a,
-    {
-        self.on_layout_changed = Some(Box::new(f));
-        self
-    }
 }
 
-impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for FlexGrid<'a, M> {
+impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for FlexGridInner<'a, M> {
     fn children(&self) -> Vec<Tree> {
         self.children.iter().map(Tree::new).collect()
     }
@@ -274,29 +405,72 @@ impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for FlexGrid<'a,
         shell: &mut Shell<'_, M>,
         viewport: &Rectangle,
     ) -> event::Status {
-        // Calculates current columns based on layout bounds
+        // Calculate current columns based on layout bounds
         let available_width = layout.bounds().width - self.padding.horizontal();
         let cols = self.calculate_columns(available_width);
 
-        // Caculate row height from first child's layout
+        // Calculate row height from first child's layout
         let row_height = layout
             .children()
             .next()
             .map(|child| child.bounds().height)
             .unwrap_or(0.0);
 
-        // Fire callback if columns changed
+        // Check if layout changed
+        let current = (cols, row_height.to_bits());
+        let layout_changed = current != self.last_layout.get();
+
+        if layout_changed {
+            self.last_layout.set(current);
+        }
+
+        // Calculate scroll request if we have a target index
+        let scroll_request = if let Some(index) = self.scroll_to_index {
+            if cols > 0 && row_height > 0.0 {
+                let row = index / cols;
+                let row_spacing = self.row_spacing as f32;
+
+                let item_top = self.padding.top + (row as f32) * (row_height + row_spacing);
+                let item_bottom = item_top + row_height;
+
+                // Get the viewport bounds (the visible area)
+                let grid_bounds = layout.bounds();
+
+                // Calculate visible range relative to grid content
+                let visible_top = viewport.y - grid_bounds.y;
+                let visible_bottom = visible_top + viewport.height;
+
+                // Check if item is outside visible range
+                if item_top < visible_top {
+                    // Item is above viewport - scroll up
+                    Some(ScrollRequest {
+                        offset_y: item_top.max(0.0),
+                    })
+                } else if item_bottom > visible_bottom {
+                    // Item is below viewport - scroll down
+                    Some(ScrollRequest {
+                        offset_y: (item_bottom - viewport.height).max(0.0),
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Fire callback if layout changed or scroll needed
         if let Some(ref on_layout_changed) = self.on_layout_changed {
-            let current = (cols, row_height);
-            if current != self.last_layout.get() {
-                self.last_layout.set(current);
-                shell.publish((on_layout_changed)(cols, row_height));
+            if layout_changed || scroll_request.is_some() {
+                shell.publish((on_layout_changed)(cols, row_height, scroll_request));
             }
         }
 
         let mut status = event::Status::Ignored;
 
-        for ((child, state), layout) in self
+        for ((child, state), child_layout) in self
             .children
             .iter_mut()
             .zip(&mut tree.children)
@@ -305,7 +479,7 @@ impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for FlexGrid<'a,
             let child_status = child.as_widget_mut().on_event(
                 state,
                 event.clone(),
-                layout,
+                child_layout,
                 cursor,
                 renderer,
                 clipboard,
@@ -380,8 +554,8 @@ impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for FlexGrid<'a,
     }
 }
 
-impl<'a, M: Clone + 'static> From<FlexGrid<'a, M>> for Element<'a, M> {
-    fn from(grid: FlexGrid<'a, M>) -> Self {
+impl<'a, M: Clone + 'static> From<FlexGridInner<'a, M>> for Element<'a, M> {
+    fn from(grid: FlexGridInner<'a, M>) -> Self {
         Element::new(grid)
     }
 }

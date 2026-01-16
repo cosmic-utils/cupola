@@ -20,7 +20,6 @@ use cosmic::{
     },
     iced_widget::{scrollable, toggler},
     task::future,
-    theme,
     widget::{
         Id, button, column, dropdown,
         menu::key_bind::{KeyBind, Modifier},
@@ -163,69 +162,6 @@ impl ImageViewer {
         }
 
         Task::batch(tasks)
-    }
-
-    /// Snap gallery scroll to the row containing the index
-    fn snap_to_thumbnail(&self, index: usize) -> Task<Message> {
-        let cols = self.gallery_view.cols;
-        if cols == 0 {
-            return Task::none();
-        }
-
-        let Some(viewport) = self.gallery_view.viewport else {
-            // Fallback to relative snap if no viewport yet (e.g. initial load)
-            let row = index / cols;
-            let total = self.nav.total();
-            let total_rows = (total + cols - 1) / cols;
-
-            if total_rows <= 1 {
-                return Task::none();
-            }
-
-            let y = row as f32 / (total_rows - 1) as f32;
-
-            return scrollable::snap_to(
-                Id::new(GalleryView::SCROLL_ID),
-                scrollable::RelativeOffset { x: 0.0, y },
-            );
-        };
-
-        let row = index / cols;
-        let spacing = theme::active().cosmic().spacing;
-
-        // Gallery layout calculations
-        let padding_top = spacing.space_s as f32;
-        let row_spacing = spacing.space_xs as f32;
-        let row_height = self.gallery_view.row_height;
-
-        let item_top = padding_top + (row as f32) * (row_height + row_spacing);
-        let item_bottom = item_top + row_height;
-
-        let view_top = viewport.absolute_offset().y;
-        let view_height = viewport.bounds().height;
-        let view_bottom = view_top + view_height;
-
-        if item_top < view_top {
-            scrollable::scroll_to(
-                Id::new(GalleryView::SCROLL_ID),
-                scrollable::AbsoluteOffset {
-                    x: 0.0,
-                    y: item_top - padding_top,
-                },
-            )
-        } else if item_bottom > view_bottom {
-            // Scroll so bottom is visible, adding a small buffer
-            let target_y = item_bottom - view_height + row_spacing;
-            scrollable::scroll_to(
-                Id::new(GalleryView::SCROLL_ID),
-                scrollable::AbsoluteOffset {
-                    x: 0.0,
-                    y: target_y,
-                },
-            )
-        } else {
-            Task::none()
-        }
     }
 
     /// Recalculate fit_zoom for the current image
@@ -448,13 +384,9 @@ impl Application for ImageViewer {
 
                             self.gallery_view.focused_index = Some(new_idx);
 
-                            // Focus the thumbnail button
+                            // Focus thumbnail button - FlexGrid handles scrolling
                             let button_id = Id::new(format!("thumbnail-{new_idx}"));
-                            return Task::batch(vec![
-                                button::focus(button_id).map(|m: Message| Action::from(m)),
-                                self.snap_to_thumbnail(new_idx)
-                                    .map(|m: Message| Action::from(m)),
-                            ]);
+                            return button::focus(button_id);
                         }
                     }
                 }
@@ -477,13 +409,9 @@ impl Application for ImageViewer {
 
                             self.gallery_view.focused_index = Some(new_idx);
 
-                            // Focus the thumbnail button
+                            // Focus thumbnail button - FlexGrid handles scrolling
                             let button_id = Id::new(format!("thumbnail-{new_idx}"));
-                            return Task::batch(vec![
-                                button::focus(button_id).map(|m: Message| Action::from(m)),
-                                self.snap_to_thumbnail(new_idx)
-                                    .map(|m: Message| Action::from(m)),
-                            ]);
+                            return button::focus(button_id);
                         }
                     }
                 }
@@ -534,9 +462,8 @@ impl Application for ImageViewer {
                     if target.is_file() && self.nav.total() > 0 {
                         self.nav.select(self.nav.index().unwrap_or(0));
                     } else if self.nav.total() > 0 {
-                        // Focus first image in gallery
+                        // Focus first image in gallery - FlexGrid handles scrolling
                         self.gallery_view.focused_index = Some(0);
-                        tasks.push(self.snap_to_thumbnail(0).map(|m: Message| Action::from(m)));
                     }
 
                     tasks.push(self.load_thumbnails());
@@ -635,13 +562,9 @@ impl Application for ImageViewer {
 
                     self.gallery_view.focused_index = Some(new_idx);
 
-                    // Focus thumbnail button
+                    // Focus thumbnail button - FlexGrid handles scrolling via scroll_to_item
                     let button_id = Id::new(format!("thumbnail-{new_idx}"));
-                    return Task::batch(vec![
-                        button::focus(button_id).map(|m: Message| Action::from(m)),
-                        self.snap_to_thumbnail(new_idx)
-                            .map(|m: Message| Action::from(m)),
-                    ]);
+                    return button::focus(button_id);
                 }
                 ViewMessage::FocusDown => {
                     let total = self.nav.total();
@@ -658,13 +581,9 @@ impl Application for ImageViewer {
 
                     self.gallery_view.focused_index = Some(new_idx);
 
-                    // Focus thumbnail button
+                    // Focus thumbnail button - FlexGrid handles scrolling via scroll_to_item
                     let button_id = Id::new(format!("thumbnail-{new_idx}"));
-                    return Task::batch(vec![
-                        button::focus(button_id).map(|m: Message| Action::from(m)),
-                        self.snap_to_thumbnail(new_idx)
-                            .map(|m: Message| Action::from(m)),
-                    ]);
+                    return button::focus(button_id);
                 }
                 ViewMessage::SelectFocused => {
                     if let Some(idx) = self.gallery_view.focused_index {
@@ -696,9 +615,24 @@ impl Application for ImageViewer {
                 ViewMessage::GalleryScroll(viewport) => {
                     self.gallery_view.viewport = Some(viewport);
                 }
-                ViewMessage::GalleryColumnsChanged { cols, row_height } => {
+                ViewMessage::GalleryLayoutChanged {
+                    cols,
+                    row_height,
+                    scroll_request,
+                } => {
                     self.gallery_view.cols = cols;
                     self.gallery_view.row_height = row_height;
+
+                    // Issue scroll command if requested
+                    if let Some(request) = scroll_request {
+                        return scrollable::scroll_to(
+                            Id::new(GalleryView::SCROLL_ID),
+                            scrollable::AbsoluteOffset {
+                                x: 0.0,
+                                y: request.offset_y,
+                            },
+                        );
+                    }
                 }
                 ViewMessage::ImageEditEvent => {
                     // TODO: Add the image edit events
