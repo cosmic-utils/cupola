@@ -984,11 +984,8 @@ impl ImageViewer {
             .on_press(Message::SetWallpaperOn(path.clone(), WallpaperTarget::All));
         button_col = button_col.push(all_btn);
 
-        // Individual output buttons (skip "all" since we have a dedicated button)
+        // Individual output buttons
         for output in &self.available_outputs {
-            if output == "all" {
-                continue;
-            }
             let output_btn = button::standard(output.clone()).on_press(Message::SetWallpaperOn(
                 path.clone(),
                 WallpaperTarget::Output(output.clone()),
@@ -1278,28 +1275,25 @@ fn is_cosmic_desktop() -> bool {
         .unwrap_or(false)
 }
 
-/// Get available outputs from COSMIC background config
+/// Get available outputs from cosmic-randr
+/// Returns output names (e.g., "eDP-1", "HDMI-A-1")
 fn get_cosmic_outputs() -> Vec<String> {
-    let config_dir = match dirs::config_dir() {
-        Some(dir) => dir.join("cosmic/com.system76.CosmicBackground/v1"),
-        None => return vec!["all".to_string()],
-    };
-
-    // Read the outputs file which lists available displays
-    let outputs_path = config_dir.join("outputs");
-    if let Ok(content) = std::fs::read_to_string(&outputs_path) {
-        // Parse RON format - it's a list like ["DP-1", "HDMI-1"]
-        let trimmed = content.trim();
-        if trimmed.starts_with('[') && trimmed.ends_with(']') {
-            let inner = &trimmed[1..trimmed.len() - 1];
-            let outputs: Vec<String> = inner
-                .split(',')
-                .filter_map(|s| {
-                    let s = s.trim().trim_matches('"');
-                    if s.is_empty() {
-                        None
+    // Use cosmic-randr to get actual output names
+    if let Ok(output) = std::process::Command::new("cosmic-randr")
+        .arg("list")
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let outputs: Vec<String> = stdout
+                .lines()
+                .filter_map(|line| {
+                    // Lines like "HDMI-A-1 (enabled)" or "eDP-1 (enabled)"
+                    let line = line.trim();
+                    if line.contains("(enabled)") || line.contains("(disabled)") {
+                        line.split_whitespace().next().map(String::from)
                     } else {
-                        Some(s.to_string())
+                        None
                     }
                 })
                 .collect();
@@ -1309,39 +1303,15 @@ fn get_cosmic_outputs() -> Vec<String> {
         }
     }
 
-    // Fallback: scan for output-specific config files
-    if let Ok(entries) = std::fs::read_dir(&config_dir) {
-        let outputs: Vec<String> = entries
-            .filter_map(|e| e.ok())
-            .filter_map(|e| {
-                let name = e.file_name().to_string_lossy().to_string();
-                // Skip known non-output files
-                if name == "all"
-                    || name == "outputs"
-                    || name == "same-on-all"
-                    || name.starts_with('.')
-                {
-                    None
-                } else {
-                    Some(name)
-                }
-            })
-            .collect();
-        if !outputs.is_empty() {
-            return outputs;
-        }
-    }
-
-    vec!["all".to_string()]
+    Vec::new()
 }
 
 /// Set wallpaper on COSMIC for a specific output (or all if None)
+/// - output: None means "all displays", Some("eDP-1") means specific output
 async fn set_wallpaper_cosmic_on(
     path: &std::path::Path,
     output: Option<&str>,
 ) -> Result<(), String> {
-    use std::io::Write;
-
     let config_dir = dirs::config_dir()
         .ok_or("Could not find config directory")?
         .join("cosmic/com.system76.CosmicBackground/v1");
@@ -1349,31 +1319,140 @@ async fn set_wallpaper_cosmic_on(
     std::fs::create_dir_all(&config_dir)
         .map_err(|e| format!("Failed to create config directory: {}", e))?;
 
-    let output_name = output.unwrap_or("all");
-    let config_path = config_dir.join(output_name);
     let path_str = path.to_string_lossy();
 
-    let content = format!(
-        r#"(
+    // Determine file name and output field value
+    // For "all": file is "all", output field is "all"
+    // For specific output: file is "output.<name>", output field is "<name>"
+    let (config_filename, output_field) = match output {
+        Some(name) => (format!("output.{}", name), name.to_string()),
+        None => ("all".to_string(), "all".to_string()),
+    };
+
+    let config_path = config_dir.join(&config_filename);
+
+    // If setting per-output wallpaper, ensure same-on-all is false and update backgrounds list
+    if let Some(output_name) = output {
+        let same_on_all_path = config_dir.join("same-on-all");
+        std::fs::write(&same_on_all_path, "false\n")
+            .map_err(|e| format!("Failed to write same-on-all: {}", e))?;
+
+        // Update the backgrounds list to include this output
+        update_backgrounds_list(&config_dir, output_name)?;
+    }
+
+    // Try to update existing config, or create new one with defaults
+    let content = if config_path.exists() {
+        // Read existing config and update only the source field
+        let existing = std::fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read config: {}", e))?;
+        update_source_in_config(&existing, &path_str)
+    } else {
+        // Create new config with defaults
+        format!(
+            r#"(
     output: "{}",
     source: Path("{}"),
     filter_by_theme: false,
-    rotation_frequency: 0,
+    rotation_frequency: 300,
     filter_method: Lanczos,
     scaling_mode: Zoom,
     sampling_method: Alphanumeric,
 )
 "#,
-        output_name, path_str
-    );
+            output_field, path_str
+        )
+    };
 
-    let mut file = std::fs::File::create(&config_path)
-        .map_err(|e| format!("Failed to create config file: {}", e))?;
-
-    file.write_all(content.as_bytes())
+    std::fs::write(&config_path, content)
         .map_err(|e| format!("Failed to write config file: {}", e))?;
 
     Ok(())
+}
+
+/// Update the backgrounds list file to include an output
+fn update_backgrounds_list(config_dir: &std::path::Path, output_name: &str) -> Result<(), String> {
+    let backgrounds_path = config_dir.join("backgrounds");
+    let mut backgrounds: Vec<String> = std::fs::read_to_string(&backgrounds_path)
+        .ok()
+        .and_then(|content| parse_backgrounds_list(&content))
+        .unwrap_or_default();
+
+    if !backgrounds.contains(&output_name.to_string()) {
+        backgrounds.push(output_name.to_string());
+        let backgrounds_content = format!(
+            "[\n    {},\n]",
+            backgrounds
+                .iter()
+                .map(|s| format!("\"{}\"", s))
+                .collect::<Vec<_>>()
+                .join(",\n    ")
+        );
+        std::fs::write(&backgrounds_path, backgrounds_content)
+            .map_err(|e| format!("Failed to write backgrounds: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Parse the backgrounds list from RON format
+fn parse_backgrounds_list(content: &str) -> Option<Vec<String>> {
+    let trimmed = content.trim();
+    if trimmed.starts_with('[') && trimmed.ends_with(']') {
+        let inner = &trimmed[1..trimmed.len() - 1];
+        Some(
+            inner
+                .split(',')
+                .filter_map(|s| {
+                    let s = s.trim().trim_matches('"');
+                    if s.is_empty() {
+                        None
+                    } else {
+                        Some(s.to_string())
+                    }
+                })
+                .collect(),
+        )
+    } else {
+        None
+    }
+}
+
+/// Update only the source field in an existing config, preserving other settings
+fn update_source_in_config(existing: &str, new_path: &str) -> String {
+    let mut result = String::new();
+    let mut skip_until_comma_or_paren = false;
+
+    for line in existing.lines() {
+        let trimmed = line.trim();
+
+        if skip_until_comma_or_paren {
+            // Skip continuation of multi-line source value
+            if trimmed.ends_with(',') || trimmed.ends_with(')') {
+                skip_until_comma_or_paren = false;
+            }
+            continue;
+        }
+
+        if trimmed.starts_with("source:") {
+            // Replace the source line
+            result.push_str(&format!("    source: Path(\"{}\"),\n", new_path));
+            // Check if this is a multi-line value
+            if !trimmed.ends_with(',') && !trimmed.ends_with(')') {
+                skip_until_comma_or_paren = true;
+            }
+        } else {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+
+    // Remove trailing newline if original didn't have one
+    if !existing.ends_with('\n') && result.ends_with('\n') {
+        result.pop();
+    }
+
+    result
 }
 
 fn key_press_handler(key: Key, modifiers: Modifiers) -> Option<Message> {
