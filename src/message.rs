@@ -90,6 +90,7 @@ pub enum NavMessage {
     DirectoryRefreshed {
         images: Vec<PathBuf>,
     },
+    GalleryFocus(usize),
     GallerySelect(usize),
 }
 
@@ -108,12 +109,7 @@ pub enum ViewMessage {
     StopSlideshow,
     ToggleSlideshow,
     ImageEditEvent,
-    GalleryScroll(cosmic::iced::widget::scrollable::Viewport),
-    GalleryLayoutChanged {
-        cols: usize,
-        row_height: f32,
-        scroll_request: Option<crate::widgets::ScrollRequest>,
-    },
+    GalleryScrollTo(f32),
 }
 
 #[derive(Debug, Clone)]

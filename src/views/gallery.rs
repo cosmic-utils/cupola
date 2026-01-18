@@ -4,7 +4,7 @@ use crate::{
     message::{Message, NavMessage, ViewMessage},
     nav::NavState,
     views::ImageViewState,
-    widgets::flex_grid,
+    widgets::flex_grid::{gallery_grid, GalleryItem},
 };
 use cosmic::{
     Element,
@@ -15,11 +15,10 @@ use cosmic::{
     },
     theme,
     widget::{
-        self, Id, Space, button, column, container, horizontal_space, icon, image, mouse_area,
-        responsive, row, scrollable, text, tooltip,
+        Id, Space, button, column, container, horizontal_space, icon, image, mouse_area,
+        responsive, row, scrollable, text,
     },
 };
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default)]
 pub struct GalleryView {
@@ -59,50 +58,50 @@ impl GalleryView {
         self.selected.contains(&idx)
     }
 
-    fn thumbnail_cell(
-        &self,
-        index: usize,
-        path: &PathBuf,
-        cache: &ImageCache,
-        size: u32,
-    ) -> Element<'static, Message> {
+    fn modal_loading(&self) -> Element<'static, Message> {
         let spacing = theme::active().cosmic().spacing;
-        let is_selected = self.is_selected(index);
 
-        let file_name = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("Unknown")
-            .to_string();
+        let close_btn = button::icon(icon::from_name("window-close-symbolic"))
+            .on_press(Message::View(ViewMessage::CloseModal))
+            .padding(spacing.space_xs)
+            .class(theme::Button::Destructive);
 
-        let content: Element<'_, Message> = if let Some(handle) = cache.get_thumbnail(path) {
-            widget::image(handle)
-                .width(Length::Fixed(size as f32))
-                .height(Length::Fixed(size as f32))
-                .content_fit(ContentFit::Contain)
-                .into()
-        } else {
-            container(icon::from_name("image-x-generic-symbolic").size((size / 2) as u16))
-                .width(Length::Fixed(size as f32))
-                .height(Length::Fixed(size as f32))
-                .center(Length::Fill)
-                .into()
-        };
+        let header = row()
+            .push(horizontal_space())
+            .push(close_btn)
+            .width(Length::Fill)
+            .padding(spacing.space_xs);
 
-        let button_id = Id::new(format!("thumbnail-{index}"));
+        let loading = container(
+            column()
+                .push(icon::from_name("content-loading-symbolic").size(48))
+                .push(text("Loading...").size(14))
+                .spacing(spacing.space_s)
+                .align_x(Alignment::Center),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center(Length::Fill);
 
-        let cell = button::custom(content)
-            .id(button_id)
-            .selected(self.focused_index == Some(index))
-            .on_press(Message::Nav(NavMessage::GallerySelect(index)))
-            .padding(spacing.space_xxs)
-            .class(if is_selected {
-                theme::Button::Suggested
-            } else {
-                theme::Button::Image
-            });
-
-        tooltip(cell, text(file_name), tooltip::Position::Bottom).into()
+        container(
+            mouse_area(
+                container(
+                    column()
+                        .push(header)
+                        .push(loading)
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .class(theme::Container::Dialog),
+            )
+            .on_press(Message::View(ViewMessage::ImageEditEvent)),
+        )
+        .padding([60, 80])
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 
     fn modal_content(
@@ -303,30 +302,27 @@ impl GalleryView {
             .into();
         }
 
-        // Build grid
-        let mut cells = Vec::new();
+        // Build gallery items
+        let items: Vec<GalleryItem> = images
+            .iter()
+            .map(|path| GalleryItem::new(path.clone(), cache.get_thumbnail(path)))
+            .collect();
 
-        for (index, path) in images.iter().enumerate() {
-            let cell = self.thumbnail_cell(index, path, cache, thumbnail_size);
-            cells.push(cell);
-        }
+        // Disable keyboard nav when modal is open (modal handles arrow keys)
+        let modal_open = nav.index().is_some();
 
-        let item_width = thumbnail_size as f32 + (spacing.space_xxs * 2) as f32;
-
-        let content = flex_grid(cells)
-            .item_width(item_width)
-            .column_spacing(spacing.space_xs)
-            .row_spacing(spacing.space_xs)
+        let content = gallery_grid(items)
+            .thumbnail_size(thumbnail_size)
+            .focused(self.focused_index)
+            .selected(self.selected.clone())
+            .spacing(spacing.space_xs)
             .padding(spacing.space_s)
             .scrollable(Id::new(Self::SCROLL_ID))
-            .scroll_to_item(self.focused_index.unwrap_or(0))
-            .on_scroll(|vp| Message::View(ViewMessage::GalleryScroll(vp)))
-            .on_layout_changed(|cols, row_height, scroll_request| {
-                Message::View(ViewMessage::GalleryLayoutChanged {
-                    cols,
-                    row_height,
-                    scroll_request,
-                })
+            .keyboard_navigation(!modal_open)
+            .on_focus(|idx| Message::Nav(NavMessage::GalleryFocus(idx)))
+            .on_activate(|idx| Message::Nav(NavMessage::GallerySelect(idx)))
+            .on_scroll_request(|req| {
+                Message::View(ViewMessage::GalleryScrollTo(req.offset_y))
             })
             .into_element();
 
@@ -346,10 +342,7 @@ impl GalleryView {
         // If modal is open wrap with popover
         if let Some(idx) = nav.index()
             && let Some(path) = images.get(idx)
-            && let Some(cached) = cache.get_full(path)
         {
-            let modal = self.modal_content(&cached, image_state);
-
             // Use mouse-area to close the modal when the backdrop is clicked.
             let backdrop = mouse_area(
                 container(Space::new(Length::Fill, Length::Fill))
@@ -358,6 +351,13 @@ impl GalleryView {
                     .class(theme::Container::Transparent),
             )
             .on_press(Message::View(ViewMessage::CloseModal));
+
+            // Show modal with image if cached, or loading state if not
+            let modal = if let Some(cached) = cache.get_full(path) {
+                self.modal_content(&cached, image_state)
+            } else {
+                self.modal_loading()
+            };
 
             // Create a stack as a modal; this avoids the modal blocking other
             // UI elements.

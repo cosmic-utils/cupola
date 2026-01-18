@@ -10,7 +10,7 @@ use crate::{
     message::{
         ContextPage, DeleteAction, EditMessage, ImageMessage, Message, NavMessage, SettingsMessage, ViewMessage,
     },
-    nav::{self, EXTENSIONS, NavState},
+    nav::{self, NavState},
     views::{GalleryView, ImageViewState},
     watcher,
 };
@@ -119,6 +119,7 @@ impl ImageViewer {
         })
     }
 
+    #[allow(dead_code)]
     fn thumbnails_remaining(&self) -> usize {
         self.nav
             .images()
@@ -129,21 +130,15 @@ impl ImageViewer {
             .count()
     }
 
-    // Batched to avoid overwhelming the system
+    // Load all thumbnails - rayon's thread pool handles parallelism
     fn load_thumbnails(&mut self) -> Task<Action<Message>> {
         let thumbnail_size = self.config.thumbnail_size.pixels();
         let mut tasks = Vec::new();
-
-        const BATCH_SIZE: usize = 100;
 
         for path in self.nav.images().iter().cloned() {
             // Skip if already cached or already loading
             if self.cache.get_thumbnail(&path).is_some() || self.cache.is_thumbnail_pending(&path) {
                 continue;
-            }
-
-            if tasks.len() >= BATCH_SIZE {
-                break;
             }
 
             // Mark as pending before spawning task
@@ -169,11 +164,35 @@ impl ImageViewer {
         Task::batch(tasks)
     }
 
-    // Preload all full images for better navigation performance
+    // Preload around a specific index (for gallery hover/focus)
+    fn preload_around(&mut self, target_idx: usize) -> Task<Action<Message>> {
+        self.preload_images_at(target_idx)
+    }
+
+    // Preload adjacent images for smooth navigation (not all images)
     fn preload_images(&mut self) -> Task<Action<Message>> {
+        let current_idx = self.nav.index().unwrap_or(0);
+        self.preload_images_at(current_idx)
+    }
+
+    fn preload_images_at(&mut self, current_idx: usize) -> Task<Action<Message>> {
+        const PRELOAD_AHEAD: usize = 5;
+        const PRELOAD_BEHIND: usize = 5;
+
+        let images = self.nav.images();
+        let total = images.len();
+        if total == 0 {
+            return Task::none();
+        }
         let mut tasks = Vec::new();
 
-        for path in self.nav.images().iter().cloned() {
+        // Calculate range of images to preload (current + adjacent)
+        let start = current_idx.saturating_sub(PRELOAD_BEHIND);
+        let end = (current_idx + PRELOAD_AHEAD + 1).min(total);
+
+        for idx in start..end {
+            let path = images[idx].clone();
+
             if self.cache.get_full(&path).is_some() || self.cache.is_pending(&path) {
                 continue;
             }
@@ -492,17 +511,9 @@ impl Application for ImageViewer {
                     self.cache.clear_pending(&path);
                     self.cache.clear_pending_thumbnail(&path);
                     tracing::error!("Failed to load {}: {error}", path.display());
-                    // Continue loading more thumbnails if there are more to load
-                    if self.thumbnails_remaining() > 0 {
-                        tasks.push(self.load_thumbnails());
-                    }
                 }
                 ImageMessage::ThumbnailReady { path, handle } => {
                     self.cache.insert_thumbnail(path, handle);
-                    // Continue loading more thumbnails if there are more to load
-                    if self.thumbnails_remaining() > 0 {
-                        tasks.push(self.load_thumbnails());
-                    }
                 }
                 ImageMessage::Clear => {
                     self.nav = NavState::new();
@@ -520,9 +531,11 @@ impl Application for ImageViewer {
                         self.image_state.zoom_fit(); // Reset to fit mode for new image
                         self.update_fit_zoom();
                         tasks.push(self.load_current_image());
+                        tasks.push(self.preload_images());
                         tasks.push(self.update_title().map(Action::from));
                     } else {
                         // Gallery view: move focus right
+                        // GalleryGrid handles this internally, but update state for keybindings
                         let total = self.nav.total();
                         if total > 0 {
                             let new_idx = match self.gallery_view.focused_index {
@@ -530,12 +543,7 @@ impl Application for ImageViewer {
                                 Some(idx) => idx,
                                 None => 0,
                             };
-
                             self.gallery_view.focused_index = Some(new_idx);
-
-                            // Focus thumbnail button - FlexGrid handles scrolling
-                            let button_id = Id::new(format!("thumbnail-{new_idx}"));
-                            return button::focus(button_id);
                         }
                     }
                 }
@@ -547,9 +555,11 @@ impl Application for ImageViewer {
                         self.image_state.zoom_fit(); // Reset to fit mode for new image
                         self.update_fit_zoom();
                         tasks.push(self.load_current_image());
+                        tasks.push(self.preload_images());
                         tasks.push(self.update_title().map(Action::from));
                     } else {
                         // Gallery view: move focus left
+                        // GalleryGrid handles this internally, but update state for keybindings
                         let total = self.nav.total();
                         if total > 0 {
                             let new_idx = match self.gallery_view.focused_index {
@@ -557,12 +567,7 @@ impl Application for ImageViewer {
                                 Some(idx) => idx,
                                 None => 0,
                             };
-
                             self.gallery_view.focused_index = Some(new_idx);
-
-                            // Focus thumbnail button - FlexGrid handles scrolling
-                            let button_id = Id::new(format!("thumbnail-{new_idx}"));
-                            return button::focus(button_id);
                         }
                     }
                 }
@@ -593,11 +598,17 @@ impl Application for ImageViewer {
                     tasks.push(self.load_current_image());
                     tasks.push(self.update_title().map(Action::from));
                 }
+                NavMessage::GalleryFocus(idx) => {
+                    self.gallery_view.focused_index = Some(idx);
+                    // Preload images around focused item for faster modal opening
+                    tasks.push(self.preload_around(idx));
+                }
                 NavMessage::GallerySelect(idx) => {
                     self.nav.select(idx);
                     self.image_state.zoom_fit();
                     self.update_fit_zoom();
                     tasks.push(self.load_current_image());
+                    tasks.push(self.preload_images());
                 }
                 NavMessage::DirectoryScanned { images, target } => {
                     self.nav.set_images(images, Some(&target));
@@ -705,42 +716,48 @@ impl Application for ImageViewer {
                     }
                 }
                 ViewMessage::FocusUp => {
+                    // When modal is open, up arrow = prev image
+                    if self.nav.is_selected() {
+                        return self.update(Message::Nav(NavMessage::Prev));
+                    }
+
+                    // GalleryGrid handles this internally via keyboard events
+                    // This is kept for global key bindings when grid isn't focused
                     let total = self.nav.total();
                     if total == 0 {
                         return Task::none();
                     }
 
-                    let cols = self.gallery_view.cols;
+                    let cols = self.gallery_view.cols.max(1);
                     let new_idx = match self.gallery_view.focused_index {
                         Some(idx) if idx >= cols => idx - cols,
-                        Some(idx) => idx, // Already on the top row
-                        None => 0,        // Init to first image
+                        Some(idx) => idx,
+                        None => 0,
                     };
 
                     self.gallery_view.focused_index = Some(new_idx);
-
-                    // Focus thumbnail button - FlexGrid handles scrolling via scroll_to_item
-                    let button_id = Id::new(format!("thumbnail-{new_idx}"));
-                    return button::focus(button_id);
                 }
                 ViewMessage::FocusDown => {
+                    // When modal is open, down arrow = next image
+                    if self.nav.is_selected() {
+                        return self.update(Message::Nav(NavMessage::Next));
+                    }
+
+                    // GalleryGrid handles this internally via keyboard events
+                    // This is kept for global key bindings when grid isn't focused
                     let total = self.nav.total();
                     if total == 0 {
                         return Task::none();
                     }
 
-                    let cols = self.gallery_view.cols;
+                    let cols = self.gallery_view.cols.max(1);
                     let new_idx = match self.gallery_view.focused_index {
                         Some(idx) if idx + cols < total => idx + cols,
-                        Some(idx) => idx, // Already on the bottom row
-                        None => 0,        // Init to first image
+                        Some(idx) => idx,
+                        None => 0,
                     };
 
                     self.gallery_view.focused_index = Some(new_idx);
-
-                    // Focus thumbnail button - FlexGrid handles scrolling via scroll_to_item
-                    let button_id = Id::new(format!("thumbnail-{new_idx}"));
-                    return button::focus(button_id);
                 }
                 ViewMessage::SelectFocused => {
                     if let Some(idx) = self.gallery_view.focused_index {
@@ -769,27 +786,14 @@ impl Application for ImageViewer {
                         tasks.push(self.update(Message::View(ViewMessage::StartSlideshow)));
                     }
                 }
-                ViewMessage::GalleryScroll(viewport) => {
-                    self.gallery_view.viewport = Some(viewport);
-                }
-                ViewMessage::GalleryLayoutChanged {
-                    cols,
-                    row_height,
-                    scroll_request,
-                } => {
-                    self.gallery_view.cols = cols;
-                    self.gallery_view.row_height = row_height;
-
-                    // Issue scroll command if requested
-                    if let Some(request) = scroll_request {
-                        return scrollable::scroll_to(
-                            Id::new(GalleryView::SCROLL_ID),
-                            scrollable::AbsoluteOffset {
-                                x: 0.0,
-                                y: request.offset_y,
-                            },
-                        );
-                    }
+                ViewMessage::GalleryScrollTo(offset_y) => {
+                    return scrollable::scroll_to(
+                        Id::new(GalleryView::SCROLL_ID),
+                        scrollable::AbsoluteOffset {
+                            x: 0.0,
+                            y: offset_y,
+                        },
+                    );
                 }
                 ViewMessage::ImageEditEvent => {
                     // TODO: Add the image edit events
@@ -862,7 +866,6 @@ impl Application for ImageViewer {
                             async {
                                 AsyncFileDialog::new()
                                     .set_title("Save Image As")
-                                    .add_filter("Images", &["png", "jpg", "jpeg", "webp", "bmp", "tiff"])
                                     .save_file()
                                     .await
                             },
@@ -996,13 +999,7 @@ impl Application for ImageViewer {
             }
             Message::OpenFileDialog => {
                 return future(async {
-                    let mut dialog = AsyncFileDialog::new()
-                        .set_title(fl!("menu-open"))
-                        .add_filter("All", &["*"]);
-
-                    for ext in EXTENSIONS {
-                        dialog = dialog.add_filter(&format!("*.{ext}"), &[*ext]);
-                    }
+                    let dialog = AsyncFileDialog::new().set_title(fl!("menu-open"));
 
                     match dialog.pick_file().await {
                         Some(handle) => {

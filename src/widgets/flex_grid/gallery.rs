@@ -1,0 +1,579 @@
+//! GalleryGrid - A specialized grid widget for image thumbnails
+//!
+//! Features:
+//! - Built-in thumbnail rendering with proper centering
+//! - Internal focus/selection tracking
+//! - Mouse hover updates focus
+//! - Keyboard navigation (arrows)
+//! - Auto-scroll on focus change
+
+use std::cell::Cell;
+use std::path::PathBuf;
+
+use cosmic::{
+    Element, Renderer,
+    iced::{
+        Color, Length, Padding, Point, Rectangle, Size,
+        advanced::{
+            Clipboard, Layout, Shell, Widget,
+            image::Renderer as ImageRenderer,
+            layout::{Limits, Node},
+            overlay,
+            renderer::{self as iced_renderer, Quad, Renderer as QuadRenderer},
+            widget::{Id, Operation, Tree},
+        },
+        event::{Event, Status},
+        keyboard::{self, Key},
+        mouse::{self, Button, Cursor},
+    },
+    widget::{container, image::Handle, scrollable},
+};
+
+use super::core;
+
+/// An item in the gallery grid
+#[derive(Debug, Clone)]
+pub struct GalleryItem {
+    pub path: PathBuf,
+    pub handle: Option<Handle>,
+}
+
+impl GalleryItem {
+    pub fn new(path: PathBuf, handle: Option<Handle>) -> Self {
+        Self { path, handle }
+    }
+}
+
+/// Scroll request for auto-scrolling
+#[derive(Debug, Clone, Copy)]
+pub struct ScrollRequest {
+    pub offset_y: f32,
+}
+
+/// Builder for GalleryGrid
+pub struct GalleryGrid<'a, M> {
+    inner: GalleryGridInner<'a, M>,
+    scrollable_id: Option<Id>,
+    keyboard_nav_enabled: bool,
+}
+
+impl<'a, M: Clone + 'static> GalleryGrid<'a, M> {
+    pub fn new(items: Vec<GalleryItem>) -> Self {
+        Self {
+            inner: GalleryGridInner {
+                items,
+                thumbnail_size: 128,
+                focused_index: None,
+                selected_indices: Vec::new(),
+                padding: Padding::ZERO,
+                column_spacing: 8,
+                row_spacing: 8,
+                width: Length::Fill,
+                height: Length::Fill,
+                on_focus: None,
+                on_activate: None,
+                on_scroll_request: None,
+                last_layout: Cell::new((0, 0)),
+                cached_cols: Cell::new(0),
+                cached_row_height: Cell::new(0.0),
+                keyboard_nav_enabled: true,
+            },
+            scrollable_id: None,
+            keyboard_nav_enabled: true,
+        }
+    }
+
+    /// Enable or disable keyboard navigation (disable when modal is open)
+    pub fn keyboard_navigation(mut self, enabled: bool) -> Self {
+        self.keyboard_nav_enabled = enabled;
+        self.inner.keyboard_nav_enabled = enabled;
+        self
+    }
+
+    pub fn thumbnail_size(mut self, size: u32) -> Self {
+        self.inner.thumbnail_size = size;
+        self
+    }
+
+    pub fn focused(mut self, index: Option<usize>) -> Self {
+        self.inner.focused_index = index;
+        self
+    }
+
+    pub fn selected(mut self, indices: Vec<usize>) -> Self {
+        self.inner.selected_indices = indices;
+        self
+    }
+
+    pub fn padding(mut self, padding: impl Into<Padding>) -> Self {
+        self.inner.padding = padding.into();
+        self
+    }
+
+    pub fn spacing(mut self, spacing: u16) -> Self {
+        self.inner.column_spacing = spacing;
+        self.inner.row_spacing = spacing;
+        self
+    }
+
+    pub fn column_spacing(mut self, spacing: u16) -> Self {
+        self.inner.column_spacing = spacing;
+        self
+    }
+
+    pub fn row_spacing(mut self, spacing: u16) -> Self {
+        self.inner.row_spacing = spacing;
+        self
+    }
+
+    pub fn width(mut self, width: impl Into<Length>) -> Self {
+        self.inner.width = width.into();
+        self
+    }
+
+    pub fn height(mut self, height: impl Into<Length>) -> Self {
+        self.inner.height = height.into();
+        self
+    }
+
+    pub fn scrollable(mut self, id: Id) -> Self {
+        self.scrollable_id = Some(id);
+        self
+    }
+
+    /// Callback when focus changes (hover or keyboard navigation)
+    pub fn on_focus<F>(mut self, f: F) -> Self
+    where
+        F: Fn(usize) -> M + 'a,
+    {
+        self.inner.on_focus = Some(Box::new(f));
+        self
+    }
+
+    /// Callback when item is activated (click or Enter)
+    pub fn on_activate<F>(mut self, f: F) -> Self
+    where
+        F: Fn(usize) -> M + 'a,
+    {
+        self.inner.on_activate = Some(Box::new(f));
+        self
+    }
+
+    /// Callback when scroll is needed (for external scrollable container)
+    pub fn on_scroll_request<F>(mut self, f: F) -> Self
+    where
+        F: Fn(ScrollRequest) -> M + 'a,
+    {
+        self.inner.on_scroll_request = Some(Box::new(f));
+        self
+    }
+
+    pub fn into_element(self) -> Element<'a, M> {
+        if let Some(scroll_id) = self.scrollable_id {
+            scrollable(container(self.inner).padding(0))
+                .id(scroll_id)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        } else {
+            self.inner.into()
+        }
+    }
+}
+
+/// Constructor function
+pub fn gallery_grid<M: Clone + 'static>(items: Vec<GalleryItem>) -> GalleryGrid<'static, M> {
+    GalleryGrid::new(items)
+}
+
+/// Inner widget that handles the actual rendering and events
+struct GalleryGridInner<'a, M> {
+    items: Vec<GalleryItem>,
+    thumbnail_size: u32,
+    focused_index: Option<usize>,
+    selected_indices: Vec<usize>,
+    padding: Padding,
+    column_spacing: u16,
+    row_spacing: u16,
+    width: Length,
+    height: Length,
+    on_focus: Option<Box<dyn Fn(usize) -> M + 'a>>,
+    on_activate: Option<Box<dyn Fn(usize) -> M + 'a>>,
+    on_scroll_request: Option<Box<dyn Fn(ScrollRequest) -> M + 'a>>,
+    last_layout: Cell<(usize, u32)>,
+    cached_cols: Cell<usize>,
+    cached_row_height: Cell<f32>,
+    keyboard_nav_enabled: bool,
+}
+
+impl<'a, M> GalleryGridInner<'a, M> {
+    fn item_at_position(&self, position: Point, bounds: Rectangle) -> Option<usize> {
+        let cols = self.cached_cols.get();
+        let row_height = self.cached_row_height.get();
+
+        if cols == 0 || row_height <= 0.0 {
+            return None;
+        }
+
+        let rows = (self.items.len() + cols - 1) / cols;
+        let item_size = self.thumbnail_size as f32;
+
+        // Convert to local coordinates
+        let local_x = position.x - bounds.x;
+        let local_y = position.y - bounds.y;
+
+        core::item_at_position(
+            (local_x, local_y),
+            cols,
+            rows,
+            item_size + (self.column_spacing * 2) as f32, // Include button padding
+            row_height,
+            self.column_spacing as f32,
+            self.row_spacing as f32,
+            self.padding,
+            self.items.len(),
+        )
+    }
+
+    fn is_selected(&self, index: usize) -> bool {
+        self.selected_indices.contains(&index)
+    }
+}
+
+impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for GalleryGridInner<'a, M> {
+    fn children(&self) -> Vec<Tree> {
+        Vec::new() // No child widgets - we render thumbnails directly
+    }
+
+    fn diff(&mut self, _tree: &mut Tree) {
+        // No children to diff
+    }
+
+    fn size(&self) -> Size<Length> {
+        Size::new(self.width, self.height)
+    }
+
+    fn layout(&self, _tree: &mut Tree, _renderer: &Renderer, limits: &Limits) -> Node {
+        if self.items.is_empty() {
+            return Node::new(Size::ZERO);
+        }
+
+        let limits = limits.width(self.width).height(self.height);
+        let max_size = limits.max();
+        let available_width = max_size.width - self.padding.horizontal();
+
+        let item_size = self.thumbnail_size as f32;
+        let button_padding = self.column_spacing as f32; // Use spacing as button padding
+        let cell_size = item_size + (button_padding * 2.0);
+
+        let cols = core::calculate_columns(
+            available_width,
+            cell_size,
+            self.column_spacing as f32,
+            1,
+            None,
+            self.items.len(),
+        );
+
+        let rows = (self.items.len() + cols - 1) / cols;
+
+        // Calculate total height
+        let row_height = cell_size;
+        let total_height = (rows as f32 * row_height)
+            + ((rows.saturating_sub(1)) as f32 * self.row_spacing as f32)
+            + self.padding.vertical();
+
+        // Cache layout info for event handling
+        self.cached_cols.set(cols);
+        self.cached_row_height.set(row_height);
+
+        // Store for layout change detection
+        let row_height_bits = row_height.to_bits();
+        self.last_layout.set((cols, row_height_bits));
+
+        let content_size = Size::new(
+            available_width + self.padding.horizontal(),
+            total_height,
+        );
+
+        Node::new(limits.resolve(self.width, self.height, content_size))
+    }
+
+    fn draw(
+        &self,
+        _tree: &Tree,
+        renderer: &mut Renderer,
+        theme: &cosmic::Theme,
+        _style: &iced_renderer::Style,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        _viewport: &Rectangle,
+    ) {
+        let bounds = layout.bounds();
+        let cols = self.cached_cols.get();
+        let row_height = self.cached_row_height.get();
+
+        if cols == 0 || self.items.is_empty() {
+            return;
+        }
+
+        let item_size = self.thumbnail_size as f32;
+        let button_padding = self.column_spacing as f32;
+        let cell_size = item_size + (button_padding * 2.0);
+
+        let cosmic_theme = theme.cosmic();
+
+        // Determine hovered item
+        let hovered_index = cursor.position().and_then(|pos| {
+            if bounds.contains(pos) {
+                self.item_at_position(pos, bounds)
+            } else {
+                None
+            }
+        });
+
+        for (index, item) in self.items.iter().enumerate() {
+            let row = index / cols;
+            let col = index % cols;
+
+            let x = bounds.x + self.padding.left
+                + (col as f32 * (cell_size + self.column_spacing as f32));
+            let y = bounds.y + self.padding.top
+                + (row as f32 * (row_height + self.row_spacing as f32));
+
+            let cell_bounds = Rectangle::new(
+                Point::new(x, y),
+                Size::new(cell_size, cell_size),
+            );
+
+            let is_focused = self.focused_index == Some(index);
+            let is_selected = self.is_selected(index);
+            let is_hovered = hovered_index == Some(index);
+
+            // Draw cell background (same style for focus and hover)
+            let bg_color = if is_selected {
+                cosmic_theme.accent_color().into()
+            } else if is_focused || is_hovered {
+                Color::from_rgba(1.0, 1.0, 1.0, 0.1)
+            } else {
+                Color::TRANSPARENT
+            };
+
+            renderer.fill_quad(
+                Quad {
+                    bounds: cell_bounds,
+                    border: cosmic::iced::Border {
+                        radius: 8.0.into(),
+                        width: 0.0,
+                        color: Color::TRANSPARENT,
+                    },
+                    shadow: Default::default(),
+                },
+                bg_color,
+            );
+
+            // Draw thumbnail or placeholder
+            let image_bounds = Rectangle::new(
+                Point::new(x + button_padding, y + button_padding),
+                Size::new(item_size, item_size),
+            );
+
+            if let Some(ref handle) = item.handle {
+                // Get image dimensions from handle if available
+                // For now, assume square and center
+                let centered = core::calculate_centered_image_bounds(
+                    image_bounds,
+                    item_size, // Assume square for now
+                    item_size,
+                );
+
+                renderer.draw_image(
+                    handle.clone().into(),
+                    cosmic::iced::widget::image::FilterMethod::Linear,
+                    centered,
+                    cosmic::iced::Radians(0.0),
+                    1.0, // opacity
+                    [0.0; 4], // snap
+                );
+            } else {
+                // Draw placeholder (simple gray box)
+                let placeholder_size = item_size / 2.0;
+                let placeholder_bounds = Rectangle::new(
+                    Point::new(
+                        image_bounds.x + (item_size - placeholder_size) / 2.0,
+                        image_bounds.y + (item_size - placeholder_size) / 2.0,
+                    ),
+                    Size::new(placeholder_size, placeholder_size),
+                );
+
+                renderer.fill_quad(
+                    Quad {
+                        bounds: placeholder_bounds,
+                        border: cosmic::iced::Border::default(),
+                        shadow: Default::default(),
+                    },
+                    Color::from_rgba(0.5, 0.5, 0.5, 0.3),
+                );
+            }
+        }
+    }
+
+    fn on_event(
+        &mut self,
+        _tree: &mut Tree,
+        event: Event,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        _renderer: &Renderer,
+        _clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, M>,
+        viewport: &Rectangle,
+    ) -> Status {
+        let bounds = layout.bounds();
+
+        match event {
+            // Mouse hover - visual only, no messages (draw() handles highlight from cursor)
+            Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                // No-op: visual hover highlighting is handled in draw() using cursor position
+                // We don't fire callbacks here to avoid scroll jank from UI refreshes
+            }
+
+            // Click - activate
+            Event::Mouse(mouse::Event::ButtonPressed(Button::Left)) => {
+                if let Some(position) = cursor.position() {
+                    if bounds.contains(position) {
+                        if let Some(index) = self.item_at_position(position, bounds) {
+                            if let Some(ref on_activate) = self.on_activate {
+                                shell.publish(on_activate(index));
+                            }
+                            return Status::Captured;
+                        }
+                    }
+                }
+            }
+
+            // Keyboard navigation (disabled when modal is open)
+            Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) => {
+                if !self.keyboard_nav_enabled {
+                    return Status::Ignored;
+                }
+
+                let cols = self.cached_cols.get();
+                if cols == 0 || self.items.is_empty() {
+                    return Status::Ignored;
+                }
+
+                let current = self.focused_index.unwrap_or(0);
+                let total = self.items.len();
+
+                let new_index = match key {
+                    Key::Named(keyboard::key::Named::ArrowLeft) => {
+                        if current > 0 { Some(current - 1) } else { None }
+                    }
+                    Key::Named(keyboard::key::Named::ArrowRight) => {
+                        if current + 1 < total { Some(current + 1) } else { None }
+                    }
+                    Key::Named(keyboard::key::Named::ArrowUp) => {
+                        if current >= cols { Some(current - cols) } else { None }
+                    }
+                    Key::Named(keyboard::key::Named::ArrowDown) => {
+                        if current + cols < total { Some(current + cols) } else { None }
+                    }
+                    Key::Named(keyboard::key::Named::Enter) => {
+                        if let Some(ref on_activate) = self.on_activate {
+                            shell.publish(on_activate(current));
+                        }
+                        return Status::Captured;
+                    }
+                    Key::Named(keyboard::key::Named::Home) => Some(0),
+                    Key::Named(keyboard::key::Named::End) => Some(total.saturating_sub(1)),
+                    _ => None,
+                };
+
+                if let Some(new_idx) = new_index {
+                    self.focused_index = Some(new_idx);
+                    if let Some(ref on_focus) = self.on_focus {
+                        shell.publish(on_focus(new_idx));
+                    }
+
+                    // Only scroll if item is out of view
+                    if let Some(ref on_scroll_request) = self.on_scroll_request {
+                        let row_height = self.cached_row_height.get();
+                        let row = new_idx / cols;
+                        let row_spacing = self.row_spacing as f32;
+
+                        // Item position relative to grid content
+                        let item_top = self.padding.top + (row as f32 * (row_height + row_spacing));
+                        let item_bottom = item_top + row_height;
+
+                        // Viewport position relative to grid (scroll offset)
+                        let scroll_offset = viewport.y - bounds.y;
+                        let visible_top = scroll_offset;
+                        let visible_bottom = scroll_offset + viewport.height;
+
+                        // Only scroll if item is not fully visible
+                        if item_top < visible_top {
+                            // Item is above viewport - scroll up to show it at top
+                            shell.publish(on_scroll_request(ScrollRequest { offset_y: item_top }));
+                        } else if item_bottom > visible_bottom {
+                            // Item is below viewport - scroll down to show it at bottom
+                            let new_offset = item_bottom - viewport.height;
+                            shell.publish(on_scroll_request(ScrollRequest { offset_y: new_offset.max(0.0) }));
+                        }
+                        // else: item is visible, no scroll needed
+                    }
+
+                    return Status::Captured;
+                }
+            }
+
+            _ => {}
+        }
+
+        Status::Ignored
+    }
+
+    fn mouse_interaction(
+        &self,
+        _tree: &Tree,
+        layout: Layout<'_>,
+        cursor: Cursor,
+        _viewport: &Rectangle,
+        _renderer: &Renderer,
+    ) -> mouse::Interaction {
+        let bounds = layout.bounds();
+        if let Some(position) = cursor.position() {
+            if bounds.contains(position) {
+                if self.item_at_position(position, bounds).is_some() {
+                    return mouse::Interaction::Pointer;
+                }
+            }
+        }
+        mouse::Interaction::default()
+    }
+
+    fn operate(
+        &self,
+        _tree: &mut Tree,
+        _layout: Layout<'_>,
+        _renderer: &Renderer,
+        _operation: &mut dyn Operation,
+    ) {
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        _tree: &'b mut Tree,
+        _layout: Layout<'_>,
+        _renderer: &Renderer,
+        _translation: cosmic::iced::Vector,
+    ) -> Option<overlay::Element<'b, M, cosmic::Theme, Renderer>> {
+        None
+    }
+}
+
+impl<'a, M: Clone + 'static> From<GalleryGridInner<'a, M>> for Element<'a, M> {
+    fn from(grid: GalleryGridInner<'a, M>) -> Self {
+        Element::new(grid)
+    }
+}
