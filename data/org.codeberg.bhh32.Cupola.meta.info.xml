@@ -3,6 +3,7 @@
   <id>org.codeberg.bhh32.Cupola</id>
   <name>Cupola</name>
   <summary>A fast, private image viewer for the COSMIC desktop</summary>
+  <summary xml:lang="cs">Rychlý, soukromý prohlížeč obrázků pro prostředí COSMIC</summary>
   <metadata_license>MIT</metadata_license>
   <project_license>MIT</project_license>
   <developer id="org.codeberg.bhh32">
@@ -13,15 +14,27 @@
       Cupola is a fast, privacy-focused image viewer built for the COSMIC desktop environment.
       It supports a wide range of image formats and provides features like gallery view, zoom, rotation, and more.
     </p>
+    <p xml:lang="cs">
+      Cupola je rychlý prohlížeč obrázků zaměřený na ochranu soukromí, vytvořený pro prostředí COSMIC.
+      Podporuje širokou škálu obrazových formátů a nabízí funkce jako zobrazení galerie, přiblížení, otáčení a další.
+    </p>
     <p>Features:</p>
+    <p xml:lang="cs">Funkce:</p>
     <ul>
       <li>Gallery view with thumbnails</li>
+      <li xml:lang="cs">Zobrazení galerie s náhledy</li>
       <li>Single image view with zoom and pan</li>
+      <li xml:lang="cs">Zobrazení jednoho obrázku s přiblížením a posouváním</li>
       <li>Image rotation and flipping</li>
+      <li xml:lang="cs">Otáčení a převracení obrázků</li>
       <li>Fullscreen mode</li>
+      <li xml:lang="cs">Režim celé obrazovky</li>
       <li>Slideshow</li>
+      <li xml:lang="cs">Prezentace</li>
       <li>Keyboard navigation</li>
+      <li xml:lang="cs">Ovládání pomocí klávesnice</li>
       <li>Recent folders</li>
+      <li xml:lang="cs">Nedávno použité složky</li>
     </ul>
   </description>
   <launchable type="desktop-id">org.codeberg.bhh32.Cupola.desktop</launchable>
@@ -36,6 +49,7 @@
   <screenshots>
     <screenshot type="default">
       <caption>Gallery view showing image thumbnails</caption>
+      <caption xml:lang="cs">Zobrazení galerie s náhledy obrázků</caption>
       <image>https://codeberg.org/bhh32/cupola/raw/branch/main/screenshots/gallery.png</image>
     </screenshot>
   </screenshots>
