@@ -1,0 +1,17 @@
+[package]
+name = "shared"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Cupola shared components"
+
+[dependencies]
+fast_image_resize.workspace = true
+image.workspace = true
+lru.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "macros"] }
+tracing.workspace = true

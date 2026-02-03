@@ -1,0 +1,29 @@
+[package]
+name = "viewer-image"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "COSMIC Viewer image handling"
+
+[dependencies]
+shared = { path = "../shared" }
+viewer-config = { path = "../viewer-config" }
+viewer-types = { path = "../viewer-types" }
+viewer-widgets = { path = "../viewer-widgets" }
+fast_image_resize.workspace = true
+image.workspace = true
+kamadak-exif.workspace = true
+libcosmic.workspace = true
+libheif-rs = { workspace = true, optional = true }
+lru.workspace = true
+rayon.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+turbojpeg.workspace = true
+zune-image.workspace = true
+
+[features]
+heif = ["libheif-rs"]

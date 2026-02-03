@@ -1327,38 +1327,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f791803201ab277ace03903de1594460708d2d54df6053f2d9e82f592b19e3b"
 
 [[package]]
-name = "cupola"
-version = "0.2.0"
-dependencies = [
- "ashpd 0.12.1",
- "dirs",
- "fast_image_resize",
- "i18n-embed",
- "i18n-embed-fl",
- "image",
- "imageproc",
- "kamadak-exif 0.6.1",
- "libcosmic",
- "libheif-rs",
- "lru 0.16.3",
- "notify",
- "once_cell",
- "palette",
- "rayon",
- "rfd 0.17.2",
- "rust-embed",
- "serde",
- "taffy",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "trash",
- "turbojpeg",
- "zune-image",
-]
-
-[[package]]
 name = "cursor-icon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3249,12 +3217,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lazy_static"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
-
-[[package]]
 name = "lebe"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3519,15 +3481,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "matchers"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
-dependencies = [
- "regex-automata",
-]
-
-[[package]]
 name = "matrixmultiply"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3772,15 +3725,6 @@ name = "notify-types"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e0826a989adedc2a244799e823aece04662b66609d96af8dff7ac6df9a8925d"
-
-[[package]]
-name = "nu-ansi-term"
-version = "0.50.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
-dependencies = [
- "windows-sys 0.61.2",
-]
 
 [[package]]
 name = "num"
@@ -5288,12 +5232,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "sharded-slab"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
+name = "shared"
+version = "0.2.0"
 dependencies = [
- "lazy_static",
+ "fast_image_resize",
+ "image",
+ "lru 0.16.3",
+ "serde",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5720,15 +5668,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thread_local"
-version = "1.1.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f60246a4944f24f6e018aa17cdeffb7818b76356965d03b07d6a9886e8962185"
-dependencies = [
- "cfg-if",
-]
-
-[[package]]
 name = "tiff"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5953,36 +5892,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
 dependencies = [
  "once_cell",
- "valuable",
-]
-
-[[package]]
-name = "tracing-log"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
-dependencies = [
- "log",
- "once_cell",
- "tracing-core",
-]
-
-[[package]]
-name = "tracing-subscriber"
-version = "0.3.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f30143827ddab0d256fd843b7a66d164e9f271cfa0dde49142c5ca0ca291f1e"
-dependencies = [
- "matchers",
- "nu-ansi-term",
- "once_cell",
- "regex-automata",
- "sharded-slab",
- "smallvec",
- "thread_local",
- "tracing",
- "tracing-core",
- "tracing-log",
 ]
 
 [[package]]
@@ -6020,9 +5929,9 @@ dependencies = [
 
 [[package]]
 name = "turbojpeg"
-version = "1.3.3"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "017914ca203ad45ccb4f6b7a61823673c43dc28c31082e1ab692c3729849d90b"
+checksum = "3b12ab1b96184a3879b4b16a74ee67436a5ef8833c0e6954a8cbf47ec9036559"
 dependencies = [
  "gcd",
  "libc",
@@ -6228,12 +6137,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "valuable"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
-
-[[package]]
 name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6250,6 +6153,97 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "viewer"
+version = "0.2.0"
+dependencies = [
+ "ashpd 0.12.1",
+ "dirs",
+ "fast_image_resize",
+ "i18n-embed",
+ "i18n-embed-fl",
+ "image",
+ "libcosmic",
+ "notify",
+ "once_cell",
+ "rfd 0.17.2",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "shared",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "trash",
+ "viewer-config",
+ "viewer-image",
+ "viewer-nav",
+ "viewer-types",
+ "viewer-widgets",
+]
+
+[[package]]
+name = "viewer-config"
+version = "0.2.0"
+dependencies = [
+ "libcosmic",
+ "palette",
+ "serde",
+ "shared",
+]
+
+[[package]]
+name = "viewer-image"
+version = "0.2.0"
+dependencies = [
+ "fast_image_resize",
+ "image",
+ "kamadak-exif 0.6.1",
+ "libcosmic",
+ "libheif-rs",
+ "lru 0.16.3",
+ "rayon",
+ "serde",
+ "shared",
+ "thiserror 2.0.17",
+ "tokio",
+ "turbojpeg",
+ "viewer-config",
+ "viewer-types",
+ "viewer-widgets",
+ "zune-image",
+]
+
+[[package]]
+name = "viewer-nav"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "shared",
+ "tokio",
+ "viewer-config",
+]
+
+[[package]]
+name = "viewer-types"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "shared",
+]
+
+[[package]]
+name = "viewer-widgets"
+version = "0.2.0"
+dependencies = [
+ "imageproc",
+ "libcosmic",
+ "shared",
+ "taffy",
+ "viewer-types",
+]
 
 [[package]]
 name = "waker-fn"

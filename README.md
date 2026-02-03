@@ -3,11 +3,14 @@ A fast, native image viewer, built with the COSMIC desktop environment in mind, 
 
 ## Features
 - Gallery: This is the default view. It enables the user to brows images as in a grid with quick thumbnail previews.
+- Aspect Ratio Preservation: Thumbnails maintain their original aspect ratios without stretching or distortion, displayed with letterboxing/pillarboxing within a consistent grid.
+- Centered Thumbnails: All thumbnails are centered within their grid cells with proper padding for different aspect ratios.
 - Single Image Modal: Selecting an image from the Gallery will open a popup for the user to view the selected image.
   - The user can zoom and scroll around the zoomed image.
 - Fast Loading: Concurrent image decoding with LRU caching.
 - Keyboard Navigation: Navigate images without taking your hands off the keyboard.
 - Native Desktop Environment Integration: Follows your desktop theme and conventions.
+- Accessibility: Screen reader support with image descriptions and keyboard navigation for all thumbnails.
 
 ## Dependencies
 - Rust 2024 Edition [installation](https://rust-lang.org/install)

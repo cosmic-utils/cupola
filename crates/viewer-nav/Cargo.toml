@@ -1,0 +1,14 @@
+[package]
+name = "viewer-nav"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Cupola navigation"
+
+[dependencies]
+shared = { path = "../shared" }
+viewer-config = { path = "../viewer-config" }
+serde.workspace = true
+tokio.workspace = true

@@ -21,3 +21,15 @@ target/
 # Added by cargo
 
 /target
+
+# Additional Rust patterns
+*.prof*
+*.rlib
+*.log
+.env*
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/

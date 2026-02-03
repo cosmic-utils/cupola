@@ -1,0 +1,20 @@
+[package]
+name = "viewer-widgets"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Reusable widgets for COSMIC Viewer"
+
+[dependencies]
+# Internal crates
+shared = { path = "../shared" }
+viewer-types = { path = "../viewer-types" }
+
+# Libcosmic
+libcosmic.workspace = true
+
+# Widgets dependencies
+taffy.workspace = true
+imageproc.workspace = true

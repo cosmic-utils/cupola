@@ -1,0 +1,33 @@
+# Clippy configuration for Cupola project
+
+# Cognitive complexity limit
+cognitive-complexity-threshold = 15
+
+# Type complexity limit
+type-complexity-threshold = 250
+
+# Function/method line count warning
+too-many-arguments-threshold = 7
+too-many-lines-threshold = 100
+
+# Enum variant size
+enum-variant-size-threshold = 200
+
+# Single-character naming
+single-char-binding-names-threshold = 4
+
+# Literal formatting
+literal-representation-threshold = 3
+
+# Trivial copy size
+trivial-copy-size-limit = 64
+
+# Array and Vec sizing
+array-size-threshold = 512000
+vec-box-size-threshold = 4096
+
+# Test configuration
+allow-expect-in-tests = true
+allow-unwrap-in-tests = true
+allow-dbg-in-tests = true
+allow-mixed-uninlined-format-args = true

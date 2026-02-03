@@ -1,4 +1,17 @@
-[package]
+[workspace]
+resolver = "3"
+
+members = [
+    "crates/shared",
+    "crates/viewer",
+    "crates/viewer-config",
+    "crates/viewer-image",
+    "crates/viewer-nav",
+    "crates/viewer-types",
+    "crates/viewer-widgets"
+]
+
+[workspace.package]
 name = "cupola"
 version = "0.2.0"
 edition = "2024"
@@ -7,7 +20,7 @@ authors = ["Bryan Hyland <bryan.hyland32@gmail.com>"]
 description = "An image viewer written for the COSMIC Desktop, usable with all DEs."
 repository = "https://codeberg.org/bhh32/cupola"
 
-[dependencies]
+[workspace.dependencies]
 # Internationalization
 i18n-embed = { version = "0.16.0", features = ["fluent-system", "desktop-requester"] }
 i18n-embed-fl = "0.10.0"
@@ -16,7 +29,7 @@ rust-embed = "8.9.0"
 # Image processing
 fast_image_resize = { version = "5.4.0", features = ["image"] }
 image = { version = "0.25.9", features = ["png", "jpeg", "gif", "webp", "bmp", "tiff", "ico", "avif"] }
-libheif-rs = { version = "2.5.2", features = ["image"], optional = true }
+libheif-rs = { version = "2.5.2", features = ["image"] }
 turbojpeg = "1.1"
 
 # Async runtime
@@ -44,7 +57,7 @@ ashpd = { version = "0.12.1", features = ["wayland"] }
 trash = "5.2.5"
 
 # Libcosmic
-[dependencies.libcosmic]
+[workspace.dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
 features = [
   "autosize",
@@ -55,11 +68,7 @@ features = [
   "surface-message",
 ]
 
-[features]
-default = []
-heif = ["libheif-rs"]
-
-[profile.release]
+[workspace.profile.release]
 lto = "thin"
 opt-level = 3
 strip = true
