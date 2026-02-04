@@ -339,7 +339,6 @@ impl GalleryView {
             .push(content)
             .push(status)
             .width(Length::Fill)
-            .height(Length::Fill)
             .into();
 
         // If modal is open wrap with popover (but not when cropping - crop has its own overlay)
