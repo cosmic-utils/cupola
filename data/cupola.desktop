@@ -2,11 +2,14 @@
 Type=Application
 Name=Cupola
 GenericName=Image Viewer
+GenericName[cs]=Prohlížeč obrázků
 Comment=View images and photos
+Comment[cs]=Podívejte se na obrázky a fotky
 Exec=cupola %F
 Icon=org.codeberg.bhh32.Cupola
 Terminal=false
 Categories=Graphics;Viewer;GTK;
 MimeType=image/png;image/jpeg;image/gif;image/webp;image/bmp;image/tiff;image/x-icon;image/avif;image/x-dcraw;
 Keywords=image;photo;picture;viewer;gallery;
+Keywords[cs]=obrázek;fotka;prohlížeč;galerie;
 StartupNotify=true
