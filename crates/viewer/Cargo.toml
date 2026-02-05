@@ -5,10 +5,10 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "COSMIC Viewer - Main binary crate"
+description = "Cupola - Main binary crate"
 
 [[bin]]
-name = "cosmic-viewer"
+name = "cupola"
 path = "src/main.rs"
 
 [dependencies]
