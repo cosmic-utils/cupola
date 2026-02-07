@@ -177,11 +177,18 @@ impl<'a, M: Clone + 'static> GalleryGrid<'a, M> {
 
     pub fn into_element(self) -> Element<'a, M> {
         if let Some(scroll_id) = self.scrollable_id {
-            scrollable(container(self.inner).padding(0))
-                .id(scroll_id)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
+            scrollable(
+                container({
+                    let mut inner = self.inner;
+                    inner.height = Length::Shrink;
+                    inner
+                })
+                .padding(0),
+            )
+            .id(scroll_id)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
         } else {
             self.inner.into()
         }
