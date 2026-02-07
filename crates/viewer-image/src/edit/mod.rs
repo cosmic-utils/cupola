@@ -44,18 +44,18 @@ pub fn crop_image(img: &DynamicImage, region: CropRegion) -> Result<DynamicImage
     let (width, height) = img.dimensions();
 
     // Validate crop region
-    if region.x as u32 >= width || region.y as u32 >= height {
+    if region.x >= width || region.y >= height {
         return Err(EditError::InvalidCrop);
     }
 
-    let crop_width = (region.width as u32).min(width - region.x as u32);
-    let crop_height = (region.height as u32).min(height - region.y as u32);
+    let crop_width = region.width.min(width - region.x);
+    let crop_height = region.height.min(height - region.y);
 
     if crop_width == 0 || crop_height == 0 {
         return Err(EditError::InvalidCrop);
     }
 
-    let cropped = img.crop_imm(region.x as u32, region.y as u32, crop_width, crop_height);
+    let cropped = img.crop_imm(region.x, region.y, crop_width, crop_height);
     Ok(cropped)
 }
 

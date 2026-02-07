@@ -1,6 +1,4 @@
-use cosmic::{
-    iced::Subscription,
-};
+use cosmic::iced::Subscription;
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::PathBuf;
 use tokio::sync::mpsc;

@@ -74,13 +74,11 @@ impl LetterboxDimensions {
             } else {
                 (original_width, original_height)
             }
+        } else if original_height > max_size {
+            let scale = max_size as f64 / original_height as f64;
+            ((original_width as f64 * scale).round() as u32, max_size)
         } else {
-            if original_height > max_size {
-                let scale = max_size as f64 / original_height as f64;
-                ((original_width as f64 * scale).round() as u32, max_size)
-            } else {
-                (original_width, original_height)
-            }
+            (original_width, original_height)
         };
 
         let (final_width, final_height, letterbox_left, letterbox_top) =

@@ -32,7 +32,12 @@ use cosmic::{
     },
 };
 use rfd::AsyncFileDialog;
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 use viewer_config::{AppTheme, ThumbnailSize, ViewerConfig, WallpaperBehavior};
 use viewer_image::edit::Transform;
 use viewer_image::{self as image, CachedImage, ImageCache, edit::EditState};
@@ -181,11 +186,6 @@ impl ImageViewer {
         Task::batch(tasks)
     }
 
-    // Preload around a specific index (for gallery hover/focus)
-    fn preload_around(&mut self, target_idx: usize) -> Task<Action<Message>> {
-        self.preload_images_at(target_idx)
-    }
-
     // Preload adjacent images for smooth navigation (not all images)
     fn preload_images(&mut self) -> Task<Action<Message>> {
         let current_idx = self.nav.index().unwrap_or(0);
@@ -207,8 +207,8 @@ impl ImageViewer {
         let start = current_idx.saturating_sub(PRELOAD_BEHIND);
         let end = (current_idx + PRELOAD_AHEAD + 1).min(total);
 
-        for idx in start..end {
-            let path = images[idx].clone();
+        for img in images.iter().take(end).skip(start) {
+            let path = img.clone();
 
             if self.cache.get_full(&path).is_some() || self.cache.is_pending(&path) {
                 continue;
@@ -284,10 +284,11 @@ impl ImageViewer {
         // If an image is selected, use its parent directory
         let dir_option: Option<PathBuf> = if let Some(current) = self.nav.current() {
             nav::get_image_dir(current)
-        } else if let Some(dir_str) = self.config.last_dir.as_ref() {
-            Some(PathBuf::from(dir_str.clone()))
         } else {
-            None
+            self.config
+                .last_dir
+                .as_ref()
+                .map(|dir_str| PathBuf::from(dir_str.clone()))
         };
 
         if let Some(dir) = dir_option {
@@ -470,26 +471,25 @@ impl Application for ImageViewer {
         );
 
         // Overlay crop dialog if active (takes priority over other dialogs)
-        if self.edit_state.is_cropping {
-            if let Some(path) = self.nav.current() {
-                if let Some(cached) = self.cache.get_full(path) {
-                    let dialog = self.crop_dialog_view(&cached);
+        if self.edit_state.is_cropping
+            && let Some(path) = self.nav.current()
+            && let Some(cached) = self.cache.get_full(path)
+        {
+            let dialog = self.crop_dialog_view(&cached);
 
-                    // Backdrop that doesn't close - crop requires explicit Apply/Cancel
-                    let backdrop = cosmic::widget::mouse_area(
-                        cosmic::widget::container(cosmic::widget::Space::new(
-                            cosmic::iced::Length::Fill,
-                            cosmic::iced::Length::Fill,
-                        ))
-                        .width(cosmic::iced::Length::Fill)
-                        .height(cosmic::iced::Length::Fill)
-                        .class(cosmic::theme::Container::Transparent),
-                    )
-                    .on_press(Message::View(ViewMessage::ImageEditEvent)); // No-op, just captures clicks
+            // Backdrop that doesn't close - crop requires explicit Apply/Cancel
+            let backdrop = cosmic::widget::mouse_area(
+                cosmic::widget::container(cosmic::widget::Space::new(
+                    cosmic::iced::Length::Fill,
+                    cosmic::iced::Length::Fill,
+                ))
+                .width(cosmic::iced::Length::Fill)
+                .height(cosmic::iced::Length::Fill)
+                .class(cosmic::theme::Container::Transparent),
+            )
+            .on_press(Message::View(ViewMessage::ImageEditEvent)); // No-op, just captures clicks
 
-                    return cosmic::iced_widget::stack![gallery, backdrop, dialog].into();
-                }
-            }
+            return cosmic::iced_widget::stack![gallery, backdrop, dialog].into();
         }
 
         // Overlay wallpaper dialog if active
@@ -936,11 +936,11 @@ impl Application for ImageViewer {
                     }
                 }
                 EditMessage::Save => {
-                    if self.edit_state.is_modified {
-                        if let Some(path) = self.edit_state.original_path.clone() {
-                            // Save and handle reload in SaveComplete
-                            tasks.push(self.save_edited_image(path).map(Action::from));
-                        }
+                    if self.edit_state.is_modified
+                        && let Some(path) = self.edit_state.original_path.clone()
+                    {
+                        // Save and handle reload in SaveComplete
+                        tasks.push(self.save_edited_image(path).map(Action::from));
                     }
                 }
                 EditMessage::SaveAs => {
@@ -995,16 +995,13 @@ impl Application for ImageViewer {
                                 tasks.push(self.load_image(path_clone.clone()));
 
                                 // Refresh gallery if SaveAs created a file in current directory
-                                if is_save_as {
-                                    if let Some(current_path) = self.nav.current() {
-                                        if let (Some(saved_parent), Some(current_parent)) =
-                                            (path_clone.parent(), current_path.parent())
-                                        {
-                                            if saved_parent == current_parent {
-                                                tasks.push(self.reload_image_list());
-                                            }
-                                        }
-                                    }
+                                if is_save_as
+                                    && let Some(current_path) = self.nav.current()
+                                    && let (Some(saved_parent), Some(current_parent)) =
+                                        (path_clone.parent(), current_path.parent())
+                                    && saved_parent == current_parent
+                                {
+                                    tasks.push(self.reload_image_list());
                                 }
                             }
                             self.edit_state.reset();
@@ -1055,7 +1052,7 @@ impl Application for ImageViewer {
                     }
                 }
                 EditMessage::CropDragMove { x, y } => {
-                    if let Some(cached) = self.nav.current().and_then(|p| self.cache.get_full(&p)) {
+                    if let Some(cached) = self.nav.current().and_then(|p| self.cache.get_full(p)) {
                         self.edit_state.crop_selection.update_drag(
                             x,
                             y,
@@ -1240,11 +1237,12 @@ impl Application for ImageViewer {
                 }
             }
             Message::SlideshowTick => {
-                if self.is_slideshow_active && !self.nav.is_empty() {
-                    if let Some(path) = self.nav.go_next().cloned() {
-                        self.update_fit_zoom();
-                        tasks.push(self.load_image(path.clone()));
-                    }
+                if self.is_slideshow_active
+                    && !self.nav.is_empty()
+                    && let Some(path) = self.nav.go_next().cloned()
+                {
+                    self.update_fit_zoom();
+                    tasks.push(self.load_image(path.clone()));
                 }
             }
             Message::SetWallpaper => {
@@ -1379,7 +1377,7 @@ impl Application for ImageViewer {
     fn subscription(&self) -> cosmic::iced::Subscription<Self::Message> {
         // Setup the subscription to watch the current directory
         let watcher_sub =
-            watcher::watch_directory(self.config.last_dir.as_ref().map(|dir| PathBuf::from(dir)))
+            watcher::watch_directory(self.config.last_dir.as_ref().map(PathBuf::from))
                 .map(Message::WatcherEvent);
 
         // Slideshow timer
@@ -1426,7 +1424,7 @@ impl ImageViewer {
             .into()
     }
 
-    fn wallpaper_dialog_view(&self, path: &PathBuf) -> Element<'_, Message> {
+    fn wallpaper_dialog_view(&self, path: &Path) -> Element<'_, Message> {
         use crate::message::WallpaperTarget;
         use cosmic::iced::Length;
         use cosmic::widget::{Space, container};
@@ -1437,14 +1435,15 @@ impl ImageViewer {
         let mut button_col = column().spacing(spacing.space_s);
 
         // "All Displays" button
-        let all_btn = button::standard(fl!("wallpaper-all-displays"))
-            .on_press(Message::SetWallpaperOn(path.clone(), WallpaperTarget::All));
+        let all_btn = button::standard(fl!("wallpaper-all-displays")).on_press(
+            Message::SetWallpaperOn(path.to_path_buf(), WallpaperTarget::All),
+        );
         button_col = button_col.push(all_btn);
 
         // Individual output buttons
         for output in &self.available_outputs {
             let output_btn = button::standard(output.clone()).on_press(Message::SetWallpaperOn(
-                path.clone(),
+                path.to_path_buf(),
                 WallpaperTarget::Output(output.clone()),
             ));
             button_col = button_col.push(output_btn);
@@ -1480,7 +1479,7 @@ impl ImageViewer {
         .into()
     }
 
-    fn delete_dialog_view(&self, path: &PathBuf) -> Element<'_, Message> {
+    fn delete_dialog_view(&self, path: &Path) -> Element<'_, Message> {
         use cosmic::iced::Length;
         use cosmic::widget::{Space, container};
 
@@ -1493,12 +1492,14 @@ impl ImageViewer {
             .unwrap_or_else(|| path.to_string_lossy().to_string());
 
         // Trash button
-        let trash_btn = button::suggested(fl!("delete-trash"))
-            .on_press(Message::ConfirmDelete(path.clone(), DeleteAction::Trash));
+        let trash_btn = button::suggested(fl!("delete-trash")).on_press(Message::ConfirmDelete(
+            path.to_path_buf(),
+            DeleteAction::Trash,
+        ));
 
         // Delete permanently button
         let delete_btn = button::destructive(fl!("delete-permanent")).on_press(
-            Message::ConfirmDelete(path.clone(), DeleteAction::Permanent),
+            Message::ConfirmDelete(path.to_path_buf(), DeleteAction::Permanent),
         );
 
         // Cancel button
@@ -1863,26 +1864,25 @@ fn get_cosmic_outputs() -> Vec<String> {
     if let Ok(output) = std::process::Command::new("cosmic-randr")
         .arg("list")
         .output()
+        && output.status.success()
     {
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            // Strip ANSI escape codes
-            let stripped = strip_ansi_codes(&stdout);
-            let outputs: Vec<String> = stripped
-                .lines()
-                .filter_map(|line| {
-                    // Lines like "HDMI-A-1 (enabled)" or "eDP-1 (enabled)"
-                    let line = line.trim();
-                    if line.contains("(enabled)") || line.contains("(disabled)") {
-                        line.split_whitespace().next().map(String::from)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            if !outputs.is_empty() {
-                return outputs;
-            }
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Strip ANSI escape codes
+        let stripped = strip_ansi_codes(&stdout);
+        let outputs: Vec<String> = stripped
+            .lines()
+            .filter_map(|line| {
+                // Lines like "HDMI-A-1 (enabled)" or "eDP-1 (enabled)"
+                let line = line.trim();
+                if line.contains("(enabled)") || line.contains("(disabled)") {
+                    line.split_whitespace().next().map(String::from)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if !outputs.is_empty() {
+            return outputs;
         }
     }
 

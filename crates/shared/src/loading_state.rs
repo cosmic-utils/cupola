@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum LoadingState {
+    #[default]
     Loading,
     Ready,
     Error(String),
@@ -61,12 +62,6 @@ impl LoadingState {
             self,
             LoadingState::Error(_) | LoadingState::AccessibilityMode
         )
-    }
-}
-
-impl Default for LoadingState {
-    fn default() -> Self {
-        Self::Loading
     }
 }
 

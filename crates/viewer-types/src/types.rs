@@ -87,6 +87,7 @@ impl CropSelection {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn resize_region(
         &self,
         rx: f32,

@@ -12,7 +12,6 @@ members = [
 ]
 
 [workspace.package]
-name = "cupola"
 version = "0.2.0"
 edition = "2024"
 license = "MIT"
@@ -67,11 +66,6 @@ features = [
   "a11y",
   "surface-message",
 ]
-
-[workspace.profile.release]
-lto = "thin"
-opt-level = 3
-strip = true
 
 # Remove this patch after upstream PR is merged
 [patch."https://github.com/pop-os/libcosmic.git"]

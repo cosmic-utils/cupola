@@ -62,12 +62,12 @@ fn load_image_sync(path: &Path) -> Result<LoadedImage, LoadError> {
     }
 
     // Use turbojpeg for JPEGs (faster than zune/image crate)
-    if matches!(extension.as_str(), "jpg" | "jpeg") {
-        if let Ok(img) = load_jpeg_full(path) {
-            return Ok(img);
-        }
-        // Fall through to other decoders if turbojpeg fails
+    if matches!(extension.as_str(), "jpg" | "jpeg")
+        && let Ok(img) = load_jpeg_full(path)
+    {
+        return Ok(img);
     }
+    // Fall through to other decoders if turbojpeg fails
 
     if is_zune_supported(&extension) {
         match load_with_zune(path) {

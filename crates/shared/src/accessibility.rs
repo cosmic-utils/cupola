@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum AriaRole {
+    #[default]
     Image,
     Group,
     Listbox,
@@ -14,12 +15,6 @@ pub enum AriaRole {
     Button,
     Link,
     Navigation,
-}
-
-impl Default for AriaRole {
-    fn default() -> Self {
-        Self::Image
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

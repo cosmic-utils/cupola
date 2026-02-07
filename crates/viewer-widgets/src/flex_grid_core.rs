@@ -79,6 +79,7 @@ pub fn calculate_scroll_offset(
 }
 
 /// Calculate the index of an item at a given position
+#[allow(clippy::too_many_arguments)]
 pub fn item_at_position(
     position: (f32, f32),
     cols: usize,

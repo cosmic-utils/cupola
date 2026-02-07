@@ -67,7 +67,7 @@ impl GridCellConfiguration {
         let rows = if cols == 0 {
             0
         } else {
-            (total_items + cols - 1) / cols
+            total_items.div_ceil(cols)
         };
         (cols, rows)
     }

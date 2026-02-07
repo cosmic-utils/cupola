@@ -219,76 +219,77 @@ impl CropWidget {
 
     /// Draw the dark overlay regions around the selection
     fn draw_overlay(&self, renderer: &mut Renderer, img_rect: Rectangle, scale: f32) {
-        if let Some((rx, ry, rw, rh)) = self.selection.region {
-            if rw > 0.0 && rh > 0.0 {
-                // Selection rectangle in screen coords
-                let sel_x = img_rect.x + rx * scale;
-                let sel_y = img_rect.y + ry * scale;
-                let sel_w = rw * scale;
-                let sel_h = rh * scale;
+        if let Some((rx, ry, rw, rh)) = self.selection.region
+            && rw > 0.0
+            && rh > 0.0
+        {
+            // Selection rectangle in screen coords
+            let sel_x = img_rect.x + rx * scale;
+            let sel_y = img_rect.y + ry * scale;
+            let sel_w = rw * scale;
+            let sel_h = rh * scale;
 
-                // Top region (full width, above selection)
-                if sel_y > img_rect.y {
-                    renderer.fill_quad(
-                        Quad {
-                            bounds: Rectangle::new(
-                                img_rect.position(),
-                                Size::new(img_rect.width, sel_y - img_rect.y),
-                            ),
-                            ..Quad::default()
-                        },
-                        OVERLAY_COLOR,
-                    );
-                }
-
-                // Bottom region (full width, below selection)
-                let sel_bottom = sel_y + sel_h;
-                let img_bottom = img_rect.y + img_rect.height;
-                if sel_bottom < img_bottom {
-                    renderer.fill_quad(
-                        Quad {
-                            bounds: Rectangle::new(
-                                Point::new(img_rect.x, sel_bottom),
-                                Size::new(img_rect.width, img_bottom - sel_bottom),
-                            ),
-                            ..Quad::default()
-                        },
-                        OVERLAY_COLOR,
-                    );
-                }
-
-                // Left region (between top and bottom overlays)
-                if sel_x > img_rect.x {
-                    renderer.fill_quad(
-                        Quad {
-                            bounds: Rectangle::new(
-                                Point::new(img_rect.x, sel_y),
-                                Size::new(sel_x - img_rect.x, sel_h),
-                            ),
-                            ..Quad::default()
-                        },
-                        OVERLAY_COLOR,
-                    );
-                }
-
-                // Right region (between top and bottom overlays)
-                let sel_right = sel_x + sel_w;
-                let img_right = img_rect.x + img_rect.width;
-                if sel_right < img_right {
-                    renderer.fill_quad(
-                        Quad {
-                            bounds: Rectangle::new(
-                                Point::new(sel_right, sel_y),
-                                Size::new(img_right - sel_right, sel_h),
-                            ),
-                            ..Quad::default()
-                        },
-                        OVERLAY_COLOR,
-                    );
-                }
-
-                return;
+            // Top region (full width, above selection)
+            if sel_y > img_rect.y {
+                renderer.fill_quad(
+                    Quad {
+                        bounds: Rectangle::new(
+                            img_rect.position(),
+                            Size::new(img_rect.width, sel_y - img_rect.y),
+                        ),
+                        ..Quad::default()
+                    },
+                    OVERLAY_COLOR,
+                );
             }
+
+            // Bottom region (full width, below selection)
+            let sel_bottom = sel_y + sel_h;
+            let img_bottom = img_rect.y + img_rect.height;
+            if sel_bottom < img_bottom {
+                renderer.fill_quad(
+                    Quad {
+                        bounds: Rectangle::new(
+                            Point::new(img_rect.x, sel_bottom),
+                            Size::new(img_rect.width, img_bottom - sel_bottom),
+                        ),
+                        ..Quad::default()
+                    },
+                    OVERLAY_COLOR,
+                );
+            }
+
+            // Left region (between top and bottom overlays)
+            if sel_x > img_rect.x {
+                renderer.fill_quad(
+                    Quad {
+                        bounds: Rectangle::new(
+                            Point::new(img_rect.x, sel_y),
+                            Size::new(sel_x - img_rect.x, sel_h),
+                        ),
+                        ..Quad::default()
+                    },
+                    OVERLAY_COLOR,
+                );
+            }
+
+            // Right region (between top and bottom overlays)
+            let sel_right = sel_x + sel_w;
+            let img_right = img_rect.x + img_rect.width;
+            if sel_right < img_right {
+                renderer.fill_quad(
+                    Quad {
+                        bounds: Rectangle::new(
+                            Point::new(sel_right, sel_y),
+                            Size::new(img_right - sel_right, sel_h),
+                        ),
+                        ..Quad::default()
+                    },
+                    OVERLAY_COLOR,
+                );
+            }
+
+            return;
         }
 
         // No valid selection - draw full overlay
@@ -509,15 +510,15 @@ impl Widget<Message, cosmic::Theme, Renderer> for CropWidget {
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                if self.selection.is_dragging {
-                    if let Some(pos) = cursor.position() {
-                        let (img_x, img_y) = self.screen_to_image(&img_rect, scale, pos);
-                        shell.publish(Message::Edit(EditMessage::CropDragMove {
-                            x: img_x,
-                            y: img_y,
-                        }));
-                        return Status::Captured;
-                    }
+                if self.selection.is_dragging
+                    && let Some(pos) = cursor.position()
+                {
+                    let (img_x, img_y) = self.screen_to_image(&img_rect, scale, pos);
+                    shell.publish(Message::Edit(EditMessage::CropDragMove {
+                        x: img_x,
+                        y: img_y,
+                    }));
+                    return Status::Captured;
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(Button::Left)) => {
@@ -547,14 +548,14 @@ impl Widget<Message, cosmic::Theme, Renderer> for CropWidget {
             return self.cursor_for_handle(self.selection.drag_handle);
         }
 
-        if let Some(pos) = cursor.position() {
-            if img_rect.contains(pos) {
-                let handle = self.hit_test_handle(&img_rect, scale, pos);
-                if handle != DragHandle::None {
-                    return self.cursor_for_handle(handle);
-                }
-                return mouse::Interaction::Crosshair;
+        if let Some(pos) = cursor.position()
+            && img_rect.contains(pos)
+        {
+            let handle = self.hit_test_handle(&img_rect, scale, pos);
+            if handle != DragHandle::None {
+                return self.cursor_for_handle(handle);
             }
+            return mouse::Interaction::Crosshair;
         }
 
         mouse::Interaction::default()

@@ -229,7 +229,7 @@ impl<'a, M> GalleryGridInner<'a, M> {
             return None;
         }
 
-        let rows = (self.items.len() + cols - 1) / cols;
+        let rows = self.items.len().div_ceil(cols);
         let item_size = self.thumbnail_size as f32;
 
         // Convert to local coordinates
@@ -289,7 +289,7 @@ impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for GalleryGridI
             self.items.len(),
         );
 
-        let rows = (self.items.len() + cols - 1) / cols;
+        let rows = self.items.len().div_ceil(cols);
 
         // Calculate total height
         let row_height = cell_size;
@@ -396,7 +396,7 @@ impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for GalleryGridI
                 );
 
                 renderer.draw_image(
-                    handle.clone().into(),
+                    handle.clone(),
                     cosmic::iced::widget::image::FilterMethod::Linear,
                     centered,
                     cosmic::iced::Radians(0.0),
@@ -448,15 +448,14 @@ impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for GalleryGridI
 
             // Click - activate
             Event::Mouse(mouse::Event::ButtonPressed(Button::Left)) => {
-                if let Some(position) = cursor.position() {
-                    if bounds.contains(position) {
-                        if let Some(index) = self.item_at_position(position, bounds) {
-                            if let Some(ref on_activate) = self.on_activate {
-                                shell.publish(on_activate(index));
-                            }
-                            return Status::Captured;
-                        }
+                if let Some(position) = cursor.position()
+                    && bounds.contains(position)
+                    && let Some(index) = self.item_at_position(position, bounds)
+                {
+                    if let Some(ref on_activate) = self.on_activate {
+                        shell.publish(on_activate(index));
                     }
+                    return Status::Captured;
                 }
             }
 
@@ -568,12 +567,11 @@ impl<'a, M: Clone + 'static> Widget<M, cosmic::Theme, Renderer> for GalleryGridI
         _renderer: &Renderer,
     ) -> mouse::Interaction {
         let bounds = layout.bounds();
-        if let Some(position) = cursor.position() {
-            if bounds.contains(position) {
-                if self.item_at_position(position, bounds).is_some() {
-                    return mouse::Interaction::Pointer;
-                }
-            }
+        if let Some(position) = cursor.position()
+            && bounds.contains(position)
+            && self.item_at_position(position, bounds).is_some()
+        {
+            return mouse::Interaction::Pointer;
         }
         mouse::Interaction::default()
     }
