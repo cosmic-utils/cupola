@@ -82,6 +82,8 @@ pub enum ImageMessage {
     ThumbnailReady {
         path: PathBuf,
         handle: Handle,
+        width: u32,
+        height: u32,
     },
     Clear,
 }

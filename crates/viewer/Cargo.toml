@@ -8,7 +8,7 @@ repository.workspace = true
 description = "COSMIC Viewer - Main binary crate"
 
 [[bin]]
-name = "cosmic-viewer"
+name = "cupola"
 path = "src/main.rs"
 
 [dependencies]

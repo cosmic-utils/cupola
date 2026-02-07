@@ -26,7 +26,7 @@ impl std::fmt::Debug for CachedImage {
 #[derive(Clone)]
 pub struct ImageCache {
     full_images: Arc<Mutex<LruCache<PathBuf, CachedImage>>>,
-    thumbnails: Arc<Mutex<LruCache<PathBuf, Handle>>>,
+    thumbnails: Arc<Mutex<LruCache<PathBuf, CachedImage>>>,
     pending: Arc<Mutex<HashSet<PathBuf>>>,
     pending_thumbnails: Arc<Mutex<HashSet<PathBuf>>>,
 }
@@ -46,7 +46,7 @@ impl ImageCache {
     }
 
     pub fn with_defaults() -> Self {
-        Self::new(20, 1000)
+        Self::new(10, 200)
     }
 
     pub fn resize(&self, new_capacity: usize) {
@@ -55,6 +55,12 @@ impl ImageCache {
                 NonZeroUsize::new(new_capacity.max(1))
                     .expect("New cache capacity should be implemented"),
             )
+        }
+    }
+
+    pub fn resize_thumbnails(&self, new_capacity: usize) {
+        if let Ok(mut cache) = self.thumbnails.lock() {
+            cache.resize(NonZeroUsize::new(new_capacity.max(1)).unwrap());
         }
     }
 
@@ -76,13 +82,13 @@ impl ImageCache {
         }
     }
 
-    pub fn get_thumbnail(&self, path: &PathBuf) -> Option<Handle> {
+    pub fn get_thumbnail(&self, path: &PathBuf) -> Option<CachedImage> {
         self.thumbnails.lock().ok()?.get(path).cloned()
     }
 
-    pub fn insert_thumbnail(&self, path: PathBuf, handle: Handle) {
+    pub fn insert_thumbnail(&self, path: PathBuf, image: CachedImage) {
         if let Ok(mut cache) = self.thumbnails.lock() {
-            cache.put(path.clone(), handle);
+            cache.put(path.clone(), image);
         }
         self.clear_pending_thumbnail(&path);
     }
@@ -110,6 +116,13 @@ impl ImageCache {
         if let Ok(mut set) = self.pending_thumbnails.lock() {
             set.remove(path);
         }
+    }
+
+    pub fn pending_thumbnail_count(&self) -> usize {
+        self.pending_thumbnails
+            .lock()
+            .map(|set| set.len())
+            .unwrap_or(0)
     }
 
     pub fn is_pending(&self, path: &PathBuf) -> bool {

@@ -56,6 +56,7 @@ pub struct ImageViewer {
     delete_dialog: Option<PathBuf>,
     edit_state: EditState,
     _save_dialog: Option<PathBuf>,
+    thumbnail_load_cursor: usize,
 }
 
 impl ImageViewer {
@@ -111,6 +112,8 @@ impl ImageViewer {
                 Ok(img) => Message::Image(ImageMessage::ThumbnailReady {
                     path,
                     handle: img.handle,
+                    width: img.width,
+                    height: img.height,
                 }),
                 Err(_) => Message::Image(ImageMessage::LoadFailed {
                     path,
@@ -131,13 +134,25 @@ impl ImageViewer {
             .count()
     }
 
-    // Load all thumbnails - rayon's thread pool handles parallelism
+    // Load thumbnails in batches to avoid GPU memory exhaustion
     fn load_thumbnails(&mut self) -> Task<Action<Message>> {
+        const MAX_PENDING: usize = 8;
+
+        let pending = self.cache.pending_thumbnail_count();
+        if pending >= MAX_PENDING {
+            return Task::none();
+        }
+
+        let slots = MAX_PENDING - pending;
         let thumbnail_size = self.config.thumbnail_size.pixels();
+        let images = self.nav.images();
+        let total = images.len();
         let mut tasks = Vec::new();
 
-        for path in self.nav.images().iter().cloned() {
-            // Skip if already cached or already loading
+        while tasks.len() < slots && self.thumbnail_load_cursor < total {
+            let path = images[self.thumbnail_load_cursor].clone();
+            self.thumbnail_load_cursor += 1;
+
             if self.cache.get_thumbnail(&path).is_some() || self.cache.is_thumbnail_pending(&path) {
                 continue;
             }
@@ -149,6 +164,8 @@ impl ImageViewer {
                     Ok(img) => Message::Image(ImageMessage::ThumbnailReady {
                         path,
                         handle: img.handle,
+                        width: img.width,
+                        height: img.height,
                     }),
                     Err(e) => {
                         tracing::warn!("Thumbnail failed to load: {e}");
@@ -176,8 +193,8 @@ impl ImageViewer {
     }
 
     fn preload_images_at(&mut self, current_idx: usize) -> Task<Action<Message>> {
-        const PRELOAD_AHEAD: usize = 5;
-        const PRELOAD_BEHIND: usize = 5;
+        const PRELOAD_AHEAD: usize = 2;
+        const PRELOAD_BEHIND: usize = 2;
 
         let images = self.nav.images();
         let total = images.len();
@@ -408,6 +425,7 @@ impl Application for ImageViewer {
             delete_dialog: None,
             edit_state: EditState::new(),
             _save_dialog: None,
+            thumbnail_load_cursor: 0,
         };
 
         let startup_path = if let Some(path) = flags {
@@ -562,8 +580,23 @@ impl Application for ImageViewer {
                     self.cache.clear_pending_thumbnail(&path);
                     tracing::error!("Failed to load {}: {error}", path.display());
                 }
-                ImageMessage::ThumbnailReady { path, handle } => {
-                    self.cache.insert_thumbnail(path, handle);
+                ImageMessage::ThumbnailReady {
+                    path,
+                    handle,
+                    width,
+                    height,
+                } => {
+                    self.cache.insert_thumbnail(
+                        path,
+                        CachedImage {
+                            handle,
+                            width,
+                            height,
+                        },
+                    );
+
+                    // Load next batch of thumbnails
+                    tasks.push(self.load_thumbnails());
                 }
                 ImageMessage::Clear => {
                     self.nav = NavState::new();
@@ -650,8 +683,6 @@ impl Application for ImageViewer {
                 }
                 NavMessage::GalleryFocus(idx) => {
                     self.gallery_view.focused_index = Some(idx);
-                    // Preload images around focused item for faster modal opening
-                    tasks.push(self.preload_around(idx));
                 }
                 NavMessage::GallerySelect(idx) => {
                     self.nav.select(idx);
@@ -662,6 +693,8 @@ impl Application for ImageViewer {
                 }
                 NavMessage::DirectoryScanned { images, target } => {
                     self.nav.set_images(images, Some(&target));
+                    self.thumbnail_load_cursor = 0;
+                    self.cache.resize_thumbnails(self.nav.total());
                     // Save last directory if enabled
                     if self.config.remember_last_dir {
                         // Get the directory
@@ -685,16 +718,20 @@ impl Application for ImageViewer {
                     }
 
                     tasks.push(self.load_thumbnails());
-                    tasks.push(self.load_current_image());
-                    tasks.push(self.preload_images());
+                    if target.is_file() {
+                        tasks.push(self.load_current_image());
+                        tasks.push(self.preload_images());
+                    }
                 }
                 NavMessage::DirectoryRefreshed { images } => {
+                    self.thumbnail_load_cursor = 0;
                     let was_selected = self.nav.is_selected();
                     let prev_path = self.nav.current().cloned();
                     let prev_idx = self.nav.index().unwrap_or(0);
 
                     // Update image list; clearing the selection
                     self.nav.set_images(images.clone(), None);
+                    self.cache.resize_thumbnails(self.nav.total());
 
                     if was_selected {
                         if self.nav.total() > 0 {
@@ -1048,6 +1085,7 @@ impl Application for ImageViewer {
                         self.config.thumbnail_size = size;
                         // Clear thumbnail cache and for regeneration
                         self.cache.clear_thumbnails();
+                        self.thumbnail_load_cursor = 0;
                         tasks.push(self.load_thumbnails());
                     }
                     SettingsMessage::ShowHiddenFiles(show) => {

@@ -301,14 +301,12 @@ impl GalleryView {
             .iter()
             .map(|path| {
                 // Get thumbnail handle and dimensions from cache
-                let (handle, width, height) = if let Some(cached) = cache.get_full(path) {
+                let (handle, width, height) = if let Some(cached) = cache.get_thumbnail(path) {
                     (Some(cached.handle), cached.width, cached.height)
-                } else if let Some(thumb_handle) = cache.get_thumbnail(path) {
-                    // If only thumbnail is cached, use default square dimensions
-                    (Some(thumb_handle), thumbnail_size, thumbnail_size)
                 } else {
                     (None, thumbnail_size, thumbnail_size)
                 };
+
                 GalleryItem::new(path.clone(), handle, width, height)
             })
             .collect();
