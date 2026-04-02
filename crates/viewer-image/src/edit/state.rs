@@ -114,12 +114,12 @@ impl EditState {
     }
 
     pub fn commit_preview(&mut self) {
-        if let Some(preview) = self.active_preview.take() {
-            if let Some(committed) = preview.commit() {
-                self.operations.push(committed);
-                self.redo_stack.clear();
-                self.is_modified = true;
-            }
+        if let Some(preview) = self.active_preview.take()
+            && let Some(committed) = preview.commit()
+        {
+            self.operations.push(committed);
+            self.redo_stack.clear();
+            self.is_modified = true;
         }
     }
 
