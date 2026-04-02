@@ -1,10 +1,11 @@
 use crate::message::{EditMessage, Message, ViewMessage};
+
 use cosmic::{
     Element,
     iced::{Alignment, Length, alignment::Horizontal},
     theme,
     widget::{
-        button, column, container, horizontal_space, icon, row, slider, text, tooltip,
+        button, column, container, horizontal_space, icon, popover, row, slider, text, tooltip,
         vertical_space,
     },
 };
@@ -45,7 +46,6 @@ pub struct AnnotationProps {
 // --- Helpers ---
 
 fn tool_btn(tool: AnnotateTool, active: AnnotateTool) -> Element<'static, Message> {
-    let tip = format!("{} ({})", tool.display_name(), tool.shortcut_key());
     let ic = icon::from_name(tool.icon_name()).size(ICON_SIZE);
     let mut btn = button::icon(ic)
         .width(Length::Fixed(BTN_SIZE))
@@ -54,7 +54,7 @@ fn tool_btn(tool: AnnotateTool, active: AnnotateTool) -> Element<'static, Messag
     if tool == active {
         btn = btn.class(theme::Button::Suggested);
     }
-    tooltip::tooltip(btn, text::body(tip), tooltip::Position::Right).into()
+    btn.into()
 }
 
 /// Quick click sets the tool. Hold (300ms) opens the popout menu.
@@ -63,7 +63,6 @@ fn popout_btn(
     active: AnnotateTool,
     _popout_msg: Message,
 ) -> Element<'static, Message> {
-    let tip = format!("{} ({})", tool.display_name(), tool.shortcut_key());
     let ic = icon::from_name(tool.icon_name()).size(ICON_SIZE);
     let is_active = tool == active;
 
@@ -97,11 +96,10 @@ fn popout_btn(
             .padding([0, 2, 2, 0]),
     ];
 
-    let area = cosmic::widget::mouse_area(visual)
+    cosmic::widget::mouse_area(visual)
         .on_press(Message::Edit(EditMessage::PopoutPress(tool)))
-        .on_release(Message::Edit(EditMessage::PopoutRelease(tool)));
-
-    tooltip::tooltip(area, text::body(tip), tooltip::Position::Right).into()
+        .on_release(Message::Edit(EditMessage::PopoutRelease(tool)))
+        .into()
 }
 
 fn toggle_btn(label: String, active: bool, msg: Message) -> Element<'static, Message> {
@@ -329,14 +327,26 @@ pub fn tool_strip(props: &AnnotationProps) -> Element<'static, Message> {
         .width(Length::Fixed(STRIP_WIDTH));
 
     // Pointer group
+    let transform_btn = popout_btn(
+        AnnotateTool::Transform,
+        active,
+        Message::View(ViewMessage::ToggleTransformPopout),
+    );
+    let transform_popover = if props.transform_popout_open {
+        popover::popover(transform_btn)
+            .popup(transform_popout_menu(props.active_transform))
+            .position(popover::Position::Point(cosmic::iced::Point::new(
+                STRIP_WIDTH, 0.0,
+            )))
+            .on_close(Message::View(ViewMessage::ClosePopouts))
+    } else {
+        popover::popover(transform_btn)
+    };
+
     strip = strip
         .push(tool_btn(AnnotateTool::Select, active))
         .push(tool_btn(AnnotateTool::Move, active))
-        .push(popout_btn(
-            AnnotateTool::Transform,
-            active,
-            Message::View(ViewMessage::ToggleTransformPopout),
-        ));
+        .push(transform_popover);
 
     strip = strip.push(divider());
 
@@ -347,12 +357,24 @@ pub fn tool_strip(props: &AnnotationProps) -> Element<'static, Message> {
 
     strip = strip.push(divider());
 
-    // Shape group (single popout button)
-    strip = strip.push(popout_btn(
+    // Shape group (single popout button with popover)
+    let shape_btn = popout_btn(
         props.active_shape,
         active,
         Message::View(ViewMessage::ToggleShapePopout),
-    ));
+    );
+    let shape_popover = if props.shape_popout_open {
+        popover::popover(shape_btn)
+            .popup(shape_popout_menu(props.active_shape))
+            .position(popover::Position::Point(cosmic::iced::Point::new(
+                STRIP_WIDTH, 0.0,
+            )))
+            .on_close(Message::View(ViewMessage::ClosePopouts))
+    } else {
+        popover::popover(shape_btn)
+    };
+
+    strip = strip.push(shape_popover);
 
     strip = strip.push(divider());
 
@@ -363,26 +385,14 @@ pub fn tool_strip(props: &AnnotationProps) -> Element<'static, Message> {
 
     strip = strip.push(vertical_space());
 
-    let strip_container = container(strip)
+    container(strip)
         .padding(spacing.space_xxs)
         .class(theme::Container::Dialog)
         .height(Length::Fill)
-        .width(Length::Fixed(STRIP_WIDTH));
-
-    // Popout overlays positioned to the right of the strip
-    let popout_left: u16 = STRIP_WIDTH as u16 + 4;
-    if props.shape_popout_open {
-        let popout = container(shape_popout_menu(props.active_shape))
-            .padding([spacing.space_xxs, 0, 0, popout_left]);
-        cosmic::iced_widget::stack![strip_container, popout].into()
-    } else if props.transform_popout_open {
-        let popout = container(transform_popout_menu(props.active_transform))
-            .padding([spacing.space_xxs, 0, 0, popout_left]);
-        cosmic::iced_widget::stack![strip_container, popout].into()
-    } else {
-        strip_container.into()
-    }
+        .width(Length::Fixed(STRIP_WIDTH))
+        .into()
 }
+
 
 pub fn properties_bar(props: &AnnotationProps) -> Element<'static, Message> {
     let spacing = theme::active().cosmic().spacing;
