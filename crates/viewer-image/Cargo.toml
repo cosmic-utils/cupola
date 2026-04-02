@@ -10,6 +10,7 @@ description = "COSMIC Viewer image handling"
 [dependencies]
 shared = { path = "../shared" }
 viewer-config = { path = "../viewer-config" }
+viewer-tools = { path = "../viewer-tools" }
 viewer-types = { path = "../viewer-types" }
 viewer-widgets = { path = "../viewer-widgets" }
 fast_image_resize.workspace = true

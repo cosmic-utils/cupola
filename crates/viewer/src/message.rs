@@ -1,6 +1,9 @@
+use cosmic::iced::alignment::Horizontal;
+use cosmic::iced::Point;
 use cosmic::widget::image::Handle;
 use std::{path::PathBuf, sync::Arc};
 use viewer_config::{AppTheme, SortMode, SortOrder, ThumbnailSize, WallpaperBehavior};
+use viewer_tools::annotate::{AnnotateColor, AnnotateTool};
 
 pub use crate::{key_binds::MenuAction, widgets::DragHandle};
 
@@ -157,4 +160,19 @@ pub enum EditMessage {
     SaveAsPathSelected(PathBuf),
     SaveComplete(Result<PathBuf, String>),
     Undo,
+    Redo,
+    SetTool(AnnotateTool),
+    SetColor(AnnotateColor),
+    SetStrokeWidth(f32),
+    ToolStart(Point),
+    ToolDrag(Point),
+    ToolEnd,
+    CommitTool,
+    CancelTool,
+    SetFontSize(f32),
+    SetBold(bool),
+    SetItalic(bool),
+    SetUnderline(bool),
+    SetAlignment(Horizontal),
+    TextInput(String),
 }

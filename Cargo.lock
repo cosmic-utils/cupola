@@ -6206,6 +6206,7 @@ dependencies = [
  "viewer-config",
  "viewer-image",
  "viewer-nav",
+ "viewer-tools",
  "viewer-types",
  "viewer-widgets",
 ]
@@ -6237,6 +6238,7 @@ dependencies = [
  "tokio",
  "turbojpeg",
  "viewer-config",
+ "viewer-tools",
  "viewer-types",
  "viewer-widgets",
  "zune-image",

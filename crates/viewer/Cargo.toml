@@ -17,6 +17,7 @@ shared = { path = "../shared" }
 viewer-config = { path = "../viewer-config" }
 viewer-image = { path = "../viewer-image" }
 viewer-nav = { path = "../viewer-nav" }
+viewer-tools = { path = "../viewer-tools" }
 viewer-types = { path = "../viewer-types" }
 viewer-widgets = { path = "../viewer-widgets" }
 

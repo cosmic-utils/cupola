@@ -1064,6 +1064,22 @@ impl Application for ImageViewer {
                 EditMessage::CropDragEnd => {
                     self.edit_state.crop_selection.end_drag();
                 }
+                // Annotation variants — handled in Phase 6
+                EditMessage::Redo
+                | EditMessage::SetTool(_)
+                | EditMessage::SetColor(_)
+                | EditMessage::SetStrokeWidth(_)
+                | EditMessage::ToolStart(_)
+                | EditMessage::ToolDrag(_)
+                | EditMessage::ToolEnd
+                | EditMessage::CommitTool
+                | EditMessage::CancelTool
+                | EditMessage::SetFontSize(_)
+                | EditMessage::SetBold(_)
+                | EditMessage::SetItalic(_)
+                | EditMessage::SetUnderline(_)
+                | EditMessage::SetAlignment(_)
+                | EditMessage::TextInput(_) => {}
             },
             Message::Settings(msg) => {
                 match msg {
