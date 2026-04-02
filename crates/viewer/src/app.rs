@@ -44,8 +44,8 @@ use viewer_image::{self as image, CachedImage, ImageCache, edit::EditState};
 use viewer_nav::{self as nav, NavState};
 use viewer_tools::ToolOperation;
 use viewer_tools::annotate::{
-    AnnotateColor, AnnotateTool, CropPreview, HighlighterPreview, PenPreview, PencilPreview,
-    ShapeKind, ShapePreview, TextPreview,
+    AnnotateColor, AnnotateTool, CropPreview, HighlighterPreview, PenPreview, ShapeKind,
+    ShapePreview, TextPreview,
 };
 
 pub struct ImageViewer {
@@ -364,8 +364,11 @@ impl ImageViewer {
         let color = self.annotate_color.0;
         let width = self.annotate_stroke;
         match tool {
+            // Pointer tools — preview behavior comes in a later task
+            AnnotateTool::Select | AnnotateTool::Move | AnnotateTool::Transform => {
+                Box::new(PenPreview::new(color, width))
+            }
             AnnotateTool::Pen => Box::new(PenPreview::new(color, width)),
-            AnnotateTool::Pencil => Box::new(PencilPreview::new(color, width)),
             AnnotateTool::Highlighter => Box::new(HighlighterPreview::new(color, width)),
             AnnotateTool::Rectangle => {
                 Box::new(ShapePreview::new(ShapeKind::Rectangle, color, width))
@@ -396,7 +399,6 @@ impl ImageViewer {
         matches!(
             tool,
             AnnotateTool::Pen
-                | AnnotateTool::Pencil
                 | AnnotateTool::Highlighter
                 | AnnotateTool::Rectangle
                 | AnnotateTool::Ellipse
@@ -1182,8 +1184,6 @@ impl Application for ImageViewer {
                     if let Some(ref mut preview) = self.edit_state.active_preview {
                         if let Some(p) = preview.as_any_mut().downcast_mut::<PenPreview>() {
                             p.color = color.0;
-                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<PencilPreview>() {
-                            p.color = color.0;
                         } else if let Some(p) = preview.as_any_mut().downcast_mut::<HighlighterPreview>() {
                             p.color = color.0;
                         } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>() {
@@ -1197,8 +1197,6 @@ impl Application for ImageViewer {
                     self.annotate_stroke = w;
                     if let Some(ref mut preview) = self.edit_state.active_preview {
                         if let Some(p) = preview.as_any_mut().downcast_mut::<PenPreview>() {
-                            p.width = w;
-                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<PencilPreview>() {
                             p.width = w;
                         } else if let Some(p) = preview.as_any_mut().downcast_mut::<HighlighterPreview>() {
                             p.width = w;

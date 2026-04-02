@@ -48,7 +48,6 @@ pub fn side_dock(active_tool: AnnotateTool) -> Element<'static, Message> {
 
     let tools = [
         AnnotateTool::Pen,
-        AnnotateTool::Pencil,
         AnnotateTool::Highlighter,
         AnnotateTool::Rectangle,
         AnnotateTool::Ellipse,
