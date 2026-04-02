@@ -2,6 +2,7 @@ use crate::{
     fl,
     message::{EditMessage, Message, NavMessage, ViewMessage},
     views::ImageViewState,
+    views::annotation_toolbar::AnnotationProps,
     widgets::{GalleryItem, gallery_grid},
 };
 use cosmic::{
@@ -19,7 +20,7 @@ use cosmic::{
 };
 use viewer_image::{CachedImage, ImageCache};
 use viewer_nav::NavState;
-use viewer_tools::annotate::{AnnotateColor, AnnotateTool};
+use viewer_tools::annotate::{AnnotateColor, AnnotateTool, CropRatio, PenMode, TransformSubTool};
 use viewer_widgets::annotation_widget;
 
 pub struct AnnotationOverlay {
@@ -310,8 +311,6 @@ impl GalleryView {
         image_state: &ImageViewState,
         ann: &AnnotationOverlay,
     ) -> Element<'static, Message> {
-        use crate::views::annotation_toolbar;
-
         let spacing = theme::active().cosmic().spacing;
         let handle = cached.handle.clone();
         let img_w = cached.width;
@@ -341,20 +340,35 @@ impl GalleryView {
             .width(Length::Fill)
             .padding(spacing.space_xs);
 
+        // Build annotation props from overlay
+        let ann_props = AnnotationProps {
+            tool: ann.tool,
+            color: ann.color,
+            stroke_width: ann.stroke_width,
+            pen_mode: PenMode::default(),
+            opacity: 1.0,
+            fill_mode: false,
+            bold: ann.bold,
+            italic: ann.italic,
+            underline: ann.underline,
+            strikethrough: false,
+            font_size: ann.font_size,
+            alignment: ann.alignment,
+            crop_ratio: CropRatio::default(),
+            can_undo: true,
+            can_redo: false,
+            is_drawing: true,
+            active_shape: AnnotateTool::Rectangle,
+            active_transform: TransformSubTool::default(),
+            shape_popout_open: false,
+            transform_popout_open: false,
+        };
+
         // Properties bar at top
-        let props_bar = annotation_toolbar::properties_bar(
-            ann.tool,
-            ann.color,
-            ann.stroke_width,
-            ann.bold,
-            ann.italic,
-            ann.underline,
-            ann.font_size,
-            ann.alignment,
-        );
+        let props_bar = super::annotation_toolbar::properties_bar(&ann_props);
 
         // Side dock
-        let dock = annotation_toolbar::side_dock(ann.tool);
+        let dock = super::annotation_toolbar::tool_strip(&ann_props);
 
         // Annotation widget
         let mut widget = annotation_widget(handle, img_w, img_h)
