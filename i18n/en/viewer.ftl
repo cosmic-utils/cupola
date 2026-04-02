@@ -42,8 +42,6 @@ menu-flip-horizontal = Flip Horizontal
 menu-flip-vertical = Flip Vertical
 menu-crop = Crop
 menu-annotate = Annotate
-crop-apply = Apply Crop
-crop-cancel = Cancel
 menu-undo = Undo
 
 # Menu - Navigate
@@ -138,3 +136,35 @@ save-dialog-filter = Images
 about-repo = Repository
 about-support = Support
 about-website = Website
+
+# Annotation tools
+annotation-select = Select
+annotation-move = Move
+annotation-transform = Transform
+annotation-pen = Pen
+annotation-highlighter = Highlighter
+annotation-shapes = Shapes
+annotation-text = Text
+annotation-crop = Crop
+annotation-save = Save
+annotation-cancel = Cancel
+annotation-undo = Undo
+annotation-redo = Redo
+annotation-freeform = Freeform
+annotation-bezier = Bézier
+annotation-stroke = Stroke
+annotation-fill = Fill
+annotation-resize = Resize
+annotation-skew = Skew
+annotation-rotate = Rotate
+annotation-flip-h = Flip Horizontal
+annotation-flip-v = Flip Vertical
+color-picker-hex = Hex
+color-picker-ok = OK
+crop-free = Free
+crop-square = 1:1
+crop-four-three = 4:3
+crop-sixteen-nine = 16:9
+crop-custom = Custom
+crop-apply = Apply
+crop-cancel = Cancel
