@@ -1,10 +1,11 @@
 use crate::ToolOperation;
+use super::{ShapeKind, ShapeOperation, render_shape};
+
 use cosmic::iced::{Color, Point, Size, mouse};
 use image::DynamicImage;
 use tiny_skia::Pixmap;
-use std::any::Any;
 
-use super::{ShapeKind, ShapeOperation, render_shape};
+use std::any::Any;
 
 #[derive(Debug, Clone)]
 pub struct ShapePreview {

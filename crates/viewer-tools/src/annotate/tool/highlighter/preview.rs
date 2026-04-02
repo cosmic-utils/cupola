@@ -2,12 +2,13 @@ use crate::{
     ToolOperation,
     renderer::{build_path, stroke_on_pixmap},
 };
+use super::HighlighterOperation;
+
 use cosmic::iced::{Color, Point, Size, mouse};
 use image::DynamicImage;
 use tiny_skia::{LineCap, LineJoin, Pixmap};
-use std::any::Any;
 
-use super::HighlighterOperation;
+use std::any::Any;
 
 const HIGHLIGHT_ALPHA: f32 = 0.35;
 
@@ -38,7 +39,7 @@ impl HighlighterPreview {
 }
 
 impl ToolOperation for HighlighterPreview {
-    fn render(&self, pixmap: &mut Pixmap, _image_size: Size, _scale: f32) {
+    fn render(&self, pixmap: &mut Pixmap, _image_size: Size, scale: f32) {
         if self.points.len() < 2 {
             return;
         }
@@ -72,7 +73,7 @@ impl ToolOperation for HighlighterPreview {
             pixmap,
             &path,
             self.highlight_color(),
-            self.width,
+            self.width / scale,
             LineCap::Square,
             LineJoin::Round,
         );

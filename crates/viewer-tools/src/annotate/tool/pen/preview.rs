@@ -2,12 +2,13 @@ use crate::{
     ToolOperation,
     renderer::{build_path, stroke_on_pixmap},
 };
+use super::PenOperation;
+
 use cosmic::iced::{Color, Point, Size, mouse};
 use image::DynamicImage;
 use tiny_skia::{LineCap, LineJoin, Pixmap};
-use std::any::Any;
 
-use super::PenOperation;
+use std::any::Any;
 
 #[derive(Debug, Clone)]
 pub struct PenPreview {

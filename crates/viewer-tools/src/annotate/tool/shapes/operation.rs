@@ -2,14 +2,15 @@ use crate::{
     ToolOperation, RotateDirection,
     renderer::{build_path, fill_on_image, stroke_on_image},
 };
-use cosmic::iced::{Color, Point, Rectangle, Size};
-use image::DynamicImage;
-use tiny_skia::{LineCap, Pixmap, Rect};
-use std::any::Any;
-
 use super::{
     ShapeKind, arrow_segments, normalize_rect, polygon_vertices, render_shape, star_vertices,
 };
+
+use cosmic::iced::{Color, Point, Rectangle, Size};
+use image::DynamicImage;
+use tiny_skia::{LineCap, Pixmap, Rect};
+
+use std::any::Any;
 
 #[derive(Debug, Clone)]
 pub struct ShapeOperation {
