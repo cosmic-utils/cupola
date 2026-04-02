@@ -1,3 +1,4 @@
+pub mod crop;
 pub mod highlighter;
 pub mod pen;
 pub mod pencil;
