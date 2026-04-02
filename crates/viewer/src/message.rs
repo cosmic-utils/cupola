@@ -1,4 +1,5 @@
 use cosmic::iced::alignment::Horizontal;
+use cosmic::iced::keyboard::Key;
 use cosmic::iced::{Color, Point};
 use cosmic::widget::image::Handle;
 use std::{path::PathBuf, sync::Arc};
@@ -34,6 +35,7 @@ pub enum Message {
     Edit(EditMessage),
     Settings(SettingsMessage),
     KeyBind(MenuAction),
+    AnnotationShortcut(Key),
     ToggleContextPage(ContextPage),
     OpenFileDialog,
     OpenFolderDialog,

@@ -1475,7 +1475,44 @@ impl Application for ImageViewer {
                     let _ = self.config.write_entry(handler);
                 }
             }
-            Message::KeyBind(action) => tasks.push(self.update(action.message())),
+            Message::KeyBind(action) => {
+                let msg = if self.is_annotating {
+                    match action {
+                        MenuAction::DeleteImage => Message::Edit(EditMessage::CancelTool),
+                        MenuAction::CloseModal => Message::Edit(EditMessage::CancelTool),
+                        _ => action.message(),
+                    }
+                } else {
+                    action.message()
+                };
+                tasks.push(self.update(msg));
+            }
+            Message::AnnotationShortcut(pressed_key) => {
+                if self.is_annotating {
+                    let msg = match &pressed_key {
+                        Key::Character(c) => match c.as_str() {
+                            "v" => Some(EditMessage::SetTool(AnnotateTool::Select)),
+                            "m" => Some(EditMessage::SetTool(AnnotateTool::Move)),
+                            "t" => Some(EditMessage::SetTool(AnnotateTool::Transform)),
+                            "p" => Some(EditMessage::SetTool(AnnotateTool::Pen)),
+                            "h" => Some(EditMessage::SetTool(AnnotateTool::Highlighter)),
+                            "r" => Some(EditMessage::SetTool(AnnotateTool::Rectangle)),
+                            "e" => Some(EditMessage::SetTool(AnnotateTool::Ellipse)),
+                            "l" => Some(EditMessage::SetTool(AnnotateTool::Line)),
+                            "a" => Some(EditMessage::SetTool(AnnotateTool::Arrow)),
+                            "s" => Some(EditMessage::SetTool(AnnotateTool::Star)),
+                            "g" => Some(EditMessage::SetTool(AnnotateTool::Polygon)),
+                            "x" => Some(EditMessage::SetTool(AnnotateTool::Text)),
+                            "c" => Some(EditMessage::SetTool(AnnotateTool::Crop)),
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+                    if let Some(edit_msg) = msg {
+                        tasks.push(self.update(Message::Edit(edit_msg)));
+                    }
+                }
+            }
             Message::Surface(action) => {
                 return cosmic::task::message(Action::Cosmic(cosmic::app::Action::Surface(action)));
             }
@@ -2513,6 +2550,19 @@ fn render_ops_refs(
 }
 
 fn key_press_handler(key: Key, modifiers: Modifiers) -> Option<Message> {
+    if modifiers.is_empty() {
+        let is_tool_shortcut = matches!(
+            &key,
+            Key::Character(c) if matches!(
+                c.as_str(),
+                "v" | "m" | "t" | "p" | "h" | "r" | "e" | "l" | "a" | "s" | "g" | "x" | "c"
+            )
+        );
+        if is_tool_shortcut {
+            return Some(Message::AnnotationShortcut(key));
+        }
+    }
+
     let mut mods = Vec::new();
 
     if modifiers.control() {

@@ -44,6 +44,7 @@ pub enum MenuAction {
     Save,
     SaveAs,
     Undo,
+    Redo,
     SortByName,
     SortByDate,
     SortBySize,
@@ -91,6 +92,7 @@ impl MenuAction {
             MenuAction::Save => Message::Edit(EditMessage::Save),
             MenuAction::SaveAs => Message::Edit(EditMessage::SaveAs),
             MenuAction::Undo => Message::Edit(EditMessage::Undo),
+            MenuAction::Redo => Message::Edit(EditMessage::Redo),
             MenuAction::SortByName => Message::Settings(SettingsMessage::SortMode(SortMode::Name)),
             MenuAction::SortByDate => Message::Settings(SettingsMessage::SortMode(SortMode::Date)),
             MenuAction::SortBySize => Message::Settings(SettingsMessage::SortMode(SortMode::Size)),
@@ -336,6 +338,14 @@ pub fn init_key_binds() -> HashMap<KeyBind, MenuAction> {
             key: Key::Character("z".into()),
         },
         MenuAction::Undo,
+    );
+
+    binds.insert(
+        KeyBind {
+            modifiers: vec![Modifier::Ctrl, Modifier::Shift],
+            key: Key::Character("z".into()),
+        },
+        MenuAction::Redo,
     );
 
     binds
