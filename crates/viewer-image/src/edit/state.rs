@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use viewer_tools::annotate::AnnotateTool;
 use viewer_tools::ToolOperation;
-use viewer_types::{CropRegion, CropSelection};
+use viewer_types::CropRegion;
 
 use image::DynamicImage;
 
@@ -21,8 +21,6 @@ pub struct EditState {
     pub transforms: Vec<Transform>,
     pub crop: Option<CropRegion>,
     pub is_modified: bool,
-    pub is_cropping: bool,
-    pub crop_selection: CropSelection,
     pub operations: Vec<Box<dyn ToolOperation>>,
     pub redo_stack: Vec<Box<dyn ToolOperation>>,
     pub active_preview: Option<Box<dyn ToolOperation>>,
@@ -42,8 +40,6 @@ impl EditState {
             transforms: Vec::new(),
             crop: None,
             is_modified: false,
-            is_cropping: false,
-            crop_selection: CropSelection::new(),
             operations: Vec::new(),
             redo_stack: Vec::new(),
             active_preview: None,
@@ -56,8 +52,6 @@ impl EditState {
         self.transforms.clear();
         self.crop = None;
         self.is_modified = false;
-        self.is_cropping = false;
-        self.crop_selection.reset();
         self.operations.clear();
         self.redo_stack.clear();
         self.active_preview = None;
@@ -78,8 +72,6 @@ impl EditState {
         self.transforms.clear();
         self.crop = None;
         self.is_modified = false;
-        self.is_cropping = false;
-        self.crop_selection.reset();
         self.operations.clear();
         self.redo_stack.clear();
         self.active_preview = None;
@@ -93,24 +85,6 @@ impl EditState {
 
     pub fn is_editing(&self) -> bool {
         self.original_path.is_some()
-    }
-
-    pub fn start_crop(&mut self) {
-        self.is_cropping = true;
-        self.crop_selection.reset();
-    }
-
-    pub fn cancel_crop(&mut self) {
-        self.is_cropping = false;
-        self.crop = None;
-        self.crop_selection.reset();
-    }
-
-    pub fn apply_crop(&mut self) {
-        self.is_cropping = false;
-        if self.crop.is_some() {
-            self.is_modified = true;
-        }
     }
 
     pub fn commit_preview(&mut self) {

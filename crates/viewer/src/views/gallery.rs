@@ -17,7 +17,7 @@ use cosmic::{
         responsive, row, scrollable, text,
     },
 };
-use viewer_image::{CachedImage, ImageCache, edit::EditState};
+use viewer_image::{CachedImage, ImageCache};
 use viewer_nav::NavState;
 use viewer_tools::annotate::{AnnotateColor, AnnotateTool};
 use viewer_widgets::annotation_widget;
@@ -387,7 +387,6 @@ impl GalleryView {
         cache: &ImageCache,
         thumbnail_size: u32,
         image_state: &ImageViewState,
-        edit_state: &EditState,
         annotation: Option<AnnotationOverlay>,
     ) -> Element<'a, Message> {
         let spacing = theme::active().cosmic().spacing;
@@ -449,9 +448,7 @@ impl GalleryView {
             .width(Length::Fill)
             .into();
 
-        // If modal is open wrap with popover (but not when cropping - crop has its own overlay)
-        if !edit_state.is_cropping
-            && let Some(idx) = nav.index()
+        if let Some(idx) = nav.index()
             && let Some(path) = images.get(idx)
         {
             // Use mouse-area to close the modal when the backdrop is clicked.

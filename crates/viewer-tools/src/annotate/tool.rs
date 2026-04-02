@@ -18,6 +18,7 @@ pub enum AnnotateTool {
     Line,
     Star,
     Polygon,
+    Crop,
 }
 
 impl AnnotateTool {
@@ -48,6 +49,7 @@ impl AnnotateTool {
             Self::Line => "insert-line-symbolic",
             Self::Star => "insert-star-symbolic",
             Self::Polygon => "insert-polygon-symbolic",
+            Self::Crop => "edit-cut-symbolic",
         }
     }
 }

@@ -1,4 +1,5 @@
 use crate::message::{ContextPage, EditMessage, Message, NavMessage, SettingsMessage, ViewMessage};
+use viewer_tools::annotate::AnnotateTool;
 use cosmic::{
     iced::keyboard::{Key, key::Named},
     widget::menu::{
@@ -80,7 +81,9 @@ impl MenuAction {
             MenuAction::Rotate180 => Message::Edit(EditMessage::Rotate180),
             MenuAction::FlipHorizontal => Message::Edit(EditMessage::FlipHorizontal),
             MenuAction::FlipVertical => Message::Edit(EditMessage::FlipVertical),
-            MenuAction::StartCrop => Message::Edit(EditMessage::StartCrop),
+            MenuAction::StartCrop => {
+                Message::Edit(EditMessage::SetTool(AnnotateTool::Crop))
+            }
             MenuAction::Save => Message::Edit(EditMessage::Save),
             MenuAction::SaveAs => Message::Edit(EditMessage::SaveAs),
             MenuAction::Undo => Message::Edit(EditMessage::Undo),

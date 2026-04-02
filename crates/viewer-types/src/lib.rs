@@ -1,6 +1,6 @@
 pub mod types;
 
-pub use types::{CropRegion, CropSelection, DragHandle};
+pub use types::CropRegion;
 
 /// ThumbnailMetadata for viewer
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

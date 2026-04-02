@@ -5,7 +5,7 @@ use std::{path::PathBuf, sync::Arc};
 use viewer_config::{AppTheme, SortMode, SortOrder, ThumbnailSize, WallpaperBehavior};
 use viewer_tools::annotate::{AnnotateColor, AnnotateTool};
 
-pub use crate::{key_binds::MenuAction, widgets::DragHandle};
+pub use crate::key_binds::MenuAction;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WallpaperTarget {
@@ -149,12 +149,6 @@ pub enum EditMessage {
     Rotate180,
     FlipHorizontal,
     FlipVertical,
-    StartCrop,
-    CancelCrop,
-    ApplyCrop,
-    CropDragStart { x: f32, y: f32, handle: DragHandle },
-    CropDragMove { x: f32, y: f32 },
-    CropDragEnd,
     Save,
     SaveAs,
     SaveAsPathSelected(PathBuf),
