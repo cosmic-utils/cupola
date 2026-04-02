@@ -188,4 +188,7 @@ pub enum EditMessage {
     PickerAlpha(f32),
     PickerHexInput(String),
     ApplyCrop,
+    PopoutPress(AnnotateTool),
+    PopoutRelease(AnnotateTool),
+    PopoutTimerFired(AnnotateTool),
 }

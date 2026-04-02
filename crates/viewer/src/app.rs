@@ -89,6 +89,7 @@ pub struct ImageViewer {
     recent_colors: Vec<cosmic::iced::Color>,
     shape_popout_open: bool,
     transform_popout_open: bool,
+    popout_pressed: Option<AnnotateTool>,
     active_shape: AnnotateTool,
     active_transform: TransformSubTool,
     is_annotating: bool,
@@ -630,6 +631,7 @@ impl Application for ImageViewer {
             recent_colors: Vec::new(),
             shape_popout_open: false,
             transform_popout_open: false,
+            popout_pressed: None,
             active_shape: AnnotateTool::Rectangle,
             active_transform: TransformSubTool::default(),
             is_annotating: false,
@@ -1460,6 +1462,43 @@ impl Application for ImageViewer {
                     self.preview_overlay = None;
                     let preview = self.create_preview_for_tool(self.annotate_tool);
                     self.edit_state.set_preview(preview);
+                }
+                EditMessage::PopoutPress(tool) => {
+                    self.popout_pressed = Some(tool);
+                    // Start 300ms timer — if it fires before release, open popout
+                    return cosmic::task::future(async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                        Message::Edit(EditMessage::PopoutTimerFired(tool))
+                    });
+                }
+                EditMessage::PopoutRelease(tool) => {
+                    if self.popout_pressed == Some(tool) {
+                        // Released before timer — quick click, set the tool
+                        self.popout_pressed = None;
+                        self.shape_popout_open = false;
+                        self.transform_popout_open = false;
+                        return self.update(Message::Edit(EditMessage::SetTool(tool)));
+                    }
+                    self.popout_pressed = None;
+                }
+                EditMessage::PopoutTimerFired(tool) => {
+                    if self.popout_pressed == Some(tool) {
+                        // Still held — open the popout
+                        self.popout_pressed = None;
+                        match tool {
+                            t if AnnotateTool::shape_tools().contains(&t)
+                                || t == self.active_shape =>
+                            {
+                                self.shape_popout_open = true;
+                                self.transform_popout_open = false;
+                            }
+                            AnnotateTool::Transform => {
+                                self.transform_popout_open = true;
+                                self.shape_popout_open = false;
+                            }
+                            _ => {}
+                        }
+                    }
                 }
             },
             Message::Settings(msg) => {

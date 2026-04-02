@@ -57,33 +57,37 @@ fn tool_btn(tool: AnnotateTool, active: AnnotateTool) -> Element<'static, Messag
     tooltip::tooltip(btn, text::body(tip), tooltip::Position::Right).into()
 }
 
-/// Click sets the tool. If already active, toggles the popout menu.
+/// Quick click sets the tool. Hold (300ms) opens the popout menu.
 fn popout_btn(
     tool: AnnotateTool,
     active: AnnotateTool,
-    popout_msg: Message,
+    _popout_msg: Message,
 ) -> Element<'static, Message> {
     let tip = format!("{} ({})", tool.display_name(), tool.shortcut_key());
     let ic = icon::from_name(tool.icon_name()).size(ICON_SIZE);
     let is_active = tool == active;
 
-    // Click sets the tool if not active, toggles popout if already active
-    let msg = if is_active {
-        popout_msg
-    } else {
-        Message::Edit(EditMessage::SetTool(tool))
-    };
-
     let indicator = text::body("\u{25B8}").size(8);
-    let overlay = cosmic::iced_widget::stack![
-        button::icon(ic)
+    let visual = cosmic::iced_widget::stack![
+        container(ic)
             .width(Length::Fixed(BTN_SIZE))
             .height(Length::Fixed(BTN_SIZE))
-            .on_press(msg)
+            .center(Length::Fixed(BTN_SIZE))
             .class(if is_active {
-                theme::Button::Suggested
+                theme::Container::custom(|t| cosmic::widget::container::Style {
+                    icon_color: Some(cosmic::iced::Color::WHITE),
+                    text_color: Some(cosmic::iced::Color::WHITE),
+                    background: Some(cosmic::iced::Background::Color(
+                        t.cosmic().accent_color().into(),
+                    )),
+                    border: cosmic::iced::Border {
+                        radius: 8.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
             } else {
-                theme::Button::Icon
+                theme::Container::Transparent
             }),
         container(indicator)
             .width(Length::Fixed(BTN_SIZE))
@@ -93,7 +97,11 @@ fn popout_btn(
             .padding([0, 2, 2, 0]),
     ];
 
-    tooltip::tooltip(overlay, text::body(tip), tooltip::Position::Right).into()
+    let area = cosmic::widget::mouse_area(visual)
+        .on_press(Message::Edit(EditMessage::PopoutPress(tool)))
+        .on_release(Message::Edit(EditMessage::PopoutRelease(tool)));
+
+    tooltip::tooltip(area, text::body(tip), tooltip::Position::Right).into()
 }
 
 fn toggle_btn(label: String, active: bool, msg: Message) -> Element<'static, Message> {
