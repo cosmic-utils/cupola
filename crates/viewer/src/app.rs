@@ -8,7 +8,7 @@ use crate::{
         ContextPage, DeleteAction, EditMessage, ImageMessage, Message, NavMessage,
         SettingsMessage, ViewMessage,
     },
-    views::{GalleryView, ImageViewState},
+    views::{GalleryView, ImageViewState, annotation_page, annotation_toolbar::AnnotationProps},
     watcher,
 };
 use ashpd::{
@@ -44,8 +44,8 @@ use viewer_image::{self as image, CachedImage, ImageCache, edit::EditState};
 use viewer_nav::{self as nav, NavState};
 use viewer_tools::ToolOperation;
 use viewer_tools::annotate::{
-    AnnotateColor, AnnotateTool, CropPreview, HighlighterPreview, PenPreview, ShapeKind,
-    ShapePreview, TextPreview,
+    AnnotateColor, AnnotateTool, CropPreview, CropRatio, HighlighterPreview, PenMode, PenPreview,
+    ShapeKind, ShapePreview, TextPreview, TransformSubTool,
 };
 
 pub struct ImageViewer {
@@ -75,6 +75,16 @@ pub struct ImageViewer {
     text_underline: bool,
     text_font_size: f32,
     text_alignment: cosmic::iced::alignment::Horizontal,
+    text_strikethrough: bool,
+    pen_mode: PenMode,
+    highlighter_opacity: f32,
+    shape_fill_mode: bool,
+    crop_ratio: CropRatio,
+    color_picker_open: bool,
+    shape_popout_open: bool,
+    transform_popout_open: bool,
+    active_shape: AnnotateTool,
+    active_transform: TransformSubTool,
     is_annotating: bool,
     committed_overlay: Option<cosmic::widget::image::Handle>,
     preview_overlay: Option<cosmic::widget::image::Handle>,
@@ -409,6 +419,56 @@ impl ImageViewer {
         )
     }
 
+    fn annotation_view(&self) -> Element<'_, Message> {
+        let props = AnnotationProps {
+            tool: self.annotate_tool,
+            color: self.annotate_color,
+            stroke_width: self.annotate_stroke,
+            pen_mode: self.pen_mode,
+            opacity: self.highlighter_opacity,
+            fill_mode: self.shape_fill_mode,
+            bold: self.text_bold,
+            italic: self.text_italic,
+            underline: self.text_underline,
+            strikethrough: self.text_strikethrough,
+            font_size: self.text_font_size,
+            alignment: self.text_alignment,
+            crop_ratio: self.crop_ratio,
+            can_undo: self.edit_state.has_operations(),
+            can_redo: !self.edit_state.redo_stack.is_empty(),
+            is_drawing: false,
+            active_shape: self.active_shape,
+            active_transform: self.active_transform,
+            shape_popout_open: self.shape_popout_open,
+            transform_popout_open: self.transform_popout_open,
+        };
+
+        if let Some(ref preview) = self.image_state.preview_image {
+            return annotation_page(
+                preview,
+                &self.image_state,
+                &props,
+                self.committed_overlay.as_ref(),
+                self.preview_overlay.as_ref(),
+            );
+        }
+
+        if let Some(idx) = self.nav.index()
+            && let Some(path) = self.nav.images().get(idx)
+            && let Some(cached) = self.cache.get_full(path)
+        {
+            return annotation_page(
+                &cached,
+                &self.image_state,
+                &props,
+                self.committed_overlay.as_ref(),
+                self.preview_overlay.as_ref(),
+            );
+        }
+
+        cosmic::widget::container(text("No image")).into()
+    }
+
     fn render_committed_overlay(&mut self) {
         let (w, h) = self.current_image_size();
         if w == 0 || h == 0 {
@@ -550,6 +610,16 @@ impl Application for ImageViewer {
             text_underline: false,
             text_font_size: 20.0,
             text_alignment: cosmic::iced::alignment::Horizontal::Left,
+            text_strikethrough: false,
+            pen_mode: PenMode::default(),
+            highlighter_opacity: 0.5,
+            shape_fill_mode: false,
+            crop_ratio: CropRatio::default(),
+            color_picker_open: false,
+            shape_popout_open: false,
+            transform_popout_open: false,
+            active_shape: AnnotateTool::Rectangle,
+            active_transform: TransformSubTool::default(),
             is_annotating: false,
             committed_overlay: None,
             preview_overlay: None,
@@ -588,28 +658,15 @@ impl Application for ImageViewer {
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
-        let annotation = if self.is_annotating {
-            Some(crate::views::gallery::AnnotationOverlay {
-                tool: self.annotate_tool,
-                color: self.annotate_color,
-                stroke_width: self.annotate_stroke,
-                bold: self.text_bold,
-                italic: self.text_italic,
-                underline: self.text_underline,
-                font_size: self.text_font_size,
-                alignment: self.text_alignment,
-                committed: self.committed_overlay.clone(),
-                preview: self.preview_overlay.clone(),
-            })
-        } else {
-            None
-        };
+        if self.is_annotating {
+            return self.annotation_view();
+        }
+
         let gallery = self.gallery_view.view(
             &self.nav,
             &self.cache,
             self.config.thumbnail_size.pixels(),
             &self.image_state,
-            annotation,
         );
 
         // Overlay wallpaper dialog if active
@@ -1012,9 +1069,18 @@ impl Application for ImageViewer {
                 ViewMessage::ImageEditEvent => {
                     // TODO: Add the image edit events
                 }
-                ViewMessage::ToggleShapePopout => {}
-                ViewMessage::ToggleTransformPopout => {}
-                ViewMessage::ClosePopouts => {}
+                ViewMessage::ToggleShapePopout => {
+                    self.shape_popout_open = !self.shape_popout_open;
+                    self.transform_popout_open = false;
+                }
+                ViewMessage::ToggleTransformPopout => {
+                    self.transform_popout_open = !self.transform_popout_open;
+                    self.shape_popout_open = false;
+                }
+                ViewMessage::ClosePopouts => {
+                    self.shape_popout_open = false;
+                    self.transform_popout_open = false;
+                }
             },
             Message::Edit(edit_msg) => match edit_msg {
                 EditMessage::Rotate90 => {
@@ -1297,16 +1363,62 @@ impl Application for ImageViewer {
                 EditMessage::TextInput(_input) => {
                     // Text input is handled by the TextPreview's internal editor
                 }
-                EditMessage::SetStrikethrough(_) => {}
-                EditMessage::SetPenMode(_) => {}
-                EditMessage::SetOpacity(_) => {}
-                EditMessage::SetFillMode(_) => {}
-                EditMessage::SetCropRatio(_) => {}
-                EditMessage::CancelAnnotation => {}
-                EditMessage::OpenColorPicker => {}
-                EditMessage::CloseColorPicker => {}
-                EditMessage::SetCustomColor(_) => {}
-                EditMessage::ApplyCrop => {}
+                EditMessage::SetStrikethrough(b) => {
+                    self.text_strikethrough = b;
+                    // TextPreview doesn't have strikethrough yet; tracked in state only
+                }
+                EditMessage::SetPenMode(mode) => {
+                    self.pen_mode = mode;
+                }
+                EditMessage::SetOpacity(o) => {
+                    self.highlighter_opacity = o;
+                    // HighlighterPreview doesn't have opacity yet; tracked in state only
+                }
+                EditMessage::SetFillMode(f) => {
+                    self.shape_fill_mode = f;
+                }
+                EditMessage::SetCropRatio(ratio) => {
+                    self.crop_ratio = ratio;
+                }
+                EditMessage::CancelAnnotation => {
+                    self.is_annotating = false;
+                    self.annotate_tool = AnnotateTool::Pen;
+                    self.committed_overlay = None;
+                    self.preview_overlay = None;
+                    self.edit_state.cancel_tool();
+                    self.color_picker_open = false;
+                    self.shape_popout_open = false;
+                    self.transform_popout_open = false;
+                }
+                EditMessage::OpenColorPicker => {
+                    self.color_picker_open = true;
+                }
+                EditMessage::CloseColorPicker => {
+                    self.color_picker_open = false;
+                }
+                EditMessage::SetCustomColor(color) => {
+                    let annotate_color = AnnotateColor(color);
+                    self.annotate_color = annotate_color;
+                    if let Some(ref mut preview) = self.edit_state.active_preview {
+                        if let Some(p) = preview.as_any_mut().downcast_mut::<PenPreview>() {
+                            p.color = color;
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<HighlighterPreview>() {
+                            p.color = color;
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>() {
+                            p.color = color;
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>() {
+                            p.color = color;
+                        }
+                    }
+                    self.color_picker_open = false;
+                }
+                EditMessage::ApplyCrop => {
+                    self.edit_state.commit_preview();
+                    self.render_committed_overlay();
+                    self.preview_overlay = None;
+                    let preview = self.create_preview_for_tool(self.annotate_tool);
+                    self.edit_state.set_preview(preview);
+                }
             },
             Message::Settings(msg) => {
                 match msg {

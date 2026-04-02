@@ -2,7 +2,6 @@ use crate::{
     fl,
     message::{EditMessage, Message, NavMessage, ViewMessage},
     views::ImageViewState,
-    views::annotation_toolbar::AnnotationProps,
     widgets::{GalleryItem, gallery_grid},
 };
 use cosmic::{
@@ -20,21 +19,6 @@ use cosmic::{
 };
 use viewer_image::{CachedImage, ImageCache};
 use viewer_nav::NavState;
-use viewer_tools::annotate::{AnnotateColor, AnnotateTool, CropRatio, PenMode, TransformSubTool};
-use viewer_widgets::annotation_widget;
-
-pub struct AnnotationOverlay {
-    pub tool: AnnotateTool,
-    pub color: AnnotateColor,
-    pub stroke_width: f32,
-    pub bold: bool,
-    pub italic: bool,
-    pub underline: bool,
-    pub font_size: f32,
-    pub alignment: cosmic::iced::alignment::Horizontal,
-    pub committed: Option<cosmic::widget::image::Handle>,
-    pub preview: Option<cosmic::widget::image::Handle>,
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct GalleryView {
@@ -305,120 +289,12 @@ impl GalleryView {
         .into()
     }
 
-    fn modal_annotate(
-        &self,
-        cached: &CachedImage,
-        image_state: &ImageViewState,
-        ann: &AnnotationOverlay,
-    ) -> Element<'static, Message> {
-        let spacing = theme::active().cosmic().spacing;
-        let handle = cached.handle.clone();
-        let img_w = cached.width;
-        let img_h = cached.height;
-        let zoom = if image_state.fit_to_window {
-            image_state.fit_zoom
-        } else {
-            image_state.zoom_level
-        };
-
-        // Close / done button
-        let close_btn = button::icon(icon::from_name("window-close-symbolic"))
-            .on_press(Message::View(ViewMessage::CloseModal))
-            .padding(spacing.space_xs)
-            .class(theme::Button::Destructive);
-
-        let done_btn = button::suggested("Done").on_press(Message::Edit(EditMessage::CommitTool));
-        let save_btn =
-            button::suggested("Save").on_press(Message::Edit(EditMessage::Save));
-
-        let header = row()
-            .push(horizontal_space())
-            .push(done_btn)
-            .push(save_btn)
-            .push(close_btn)
-            .spacing(spacing.space_xs)
-            .width(Length::Fill)
-            .padding(spacing.space_xs);
-
-        // Build annotation props from overlay
-        let ann_props = AnnotationProps {
-            tool: ann.tool,
-            color: ann.color,
-            stroke_width: ann.stroke_width,
-            pen_mode: PenMode::default(),
-            opacity: 1.0,
-            fill_mode: false,
-            bold: ann.bold,
-            italic: ann.italic,
-            underline: ann.underline,
-            strikethrough: false,
-            font_size: ann.font_size,
-            alignment: ann.alignment,
-            crop_ratio: CropRatio::default(),
-            can_undo: true,
-            can_redo: false,
-            is_drawing: true,
-            active_shape: AnnotateTool::Rectangle,
-            active_transform: TransformSubTool::default(),
-            shape_popout_open: false,
-            transform_popout_open: false,
-        };
-
-        // Properties bar at top
-        let props_bar = super::annotation_toolbar::properties_bar(&ann_props);
-
-        // Side dock
-        let dock = super::annotation_toolbar::tool_strip(&ann_props);
-
-        // Annotation widget
-        let mut widget = annotation_widget(handle, img_w, img_h)
-            .zoom(zoom)
-            .on_tool_start(|pt| Message::Edit(EditMessage::ToolStart(pt)))
-            .on_tool_drag(|pt| Message::Edit(EditMessage::ToolDrag(pt)))
-            .on_tool_end(|| Message::Edit(EditMessage::ToolEnd));
-
-        if let Some(ref committed) = ann.committed {
-            widget = widget.committed_overlay(committed.clone());
-        }
-        if let Some(ref preview) = ann.preview {
-            widget = widget.preview_overlay(preview.clone());
-        }
-
-        let center_area = row()
-            .push(dock)
-            .push(cosmic::Element::from(widget))
-            .width(Length::Fill)
-            .height(Length::Fill);
-
-        container(
-            mouse_area(
-                container(
-                    column()
-                        .push(header)
-                        .push(props_bar)
-                        .push(center_area)
-                        .width(Length::Fill)
-                        .height(Length::Fill),
-                )
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .class(theme::Container::Dialog),
-            )
-            .on_press(Message::View(ViewMessage::ImageEditEvent)),
-        )
-        .padding([20, 20])
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
-    }
-
     pub fn view<'a>(
         &'a self,
         nav: &NavState,
         cache: &ImageCache,
         thumbnail_size: u32,
         image_state: &ImageViewState,
-        annotation: Option<AnnotationOverlay>,
     ) -> Element<'a, Message> {
         let spacing = theme::active().cosmic().spacing;
         let images = nav.images();
@@ -493,16 +369,7 @@ impl GalleryView {
 
             // Show modal with image
             // Use preview image if available (contains edits), otherwise use cached
-            let modal = if let Some(ref ann) = annotation {
-                // Annotation mode: use AnnotationWidget
-                if let Some(ref preview) = image_state.preview_image {
-                    self.modal_annotate(preview, image_state, ann)
-                } else if let Some(cached) = cache.get_full(path) {
-                    self.modal_annotate(&cached, image_state, ann)
-                } else {
-                    self.modal_loading()
-                }
-            } else if let Some(ref preview) = image_state.preview_image {
+            let modal = if let Some(ref preview) = image_state.preview_image {
                 self.modal_content(preview, image_state)
             } else if let Some(cached) = cache.get_full(path) {
                 self.modal_content(&cached, image_state)
