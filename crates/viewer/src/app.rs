@@ -1012,6 +1012,9 @@ impl Application for ImageViewer {
                 ViewMessage::ImageEditEvent => {
                     // TODO: Add the image edit events
                 }
+                ViewMessage::ToggleShapePopout => {}
+                ViewMessage::ToggleTransformPopout => {}
+                ViewMessage::ClosePopouts => {}
             },
             Message::Edit(edit_msg) => match edit_msg {
                 EditMessage::Rotate90 => {
@@ -1294,6 +1297,16 @@ impl Application for ImageViewer {
                 EditMessage::TextInput(_input) => {
                     // Text input is handled by the TextPreview's internal editor
                 }
+                EditMessage::SetStrikethrough(_) => {}
+                EditMessage::SetPenMode(_) => {}
+                EditMessage::SetOpacity(_) => {}
+                EditMessage::SetFillMode(_) => {}
+                EditMessage::SetCropRatio(_) => {}
+                EditMessage::CancelAnnotation => {}
+                EditMessage::OpenColorPicker => {}
+                EditMessage::CloseColorPicker => {}
+                EditMessage::SetCustomColor(_) => {}
+                EditMessage::ApplyCrop => {}
             },
             Message::Settings(msg) => {
                 match msg {

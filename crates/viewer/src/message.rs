@@ -1,9 +1,9 @@
 use cosmic::iced::alignment::Horizontal;
-use cosmic::iced::Point;
+use cosmic::iced::{Color, Point};
 use cosmic::widget::image::Handle;
 use std::{path::PathBuf, sync::Arc};
 use viewer_config::{AppTheme, SortMode, SortOrder, ThumbnailSize, WallpaperBehavior};
-use viewer_tools::annotate::{AnnotateColor, AnnotateTool};
+use viewer_tools::annotate::{AnnotateColor, AnnotateTool, CropRatio, PenMode};
 
 pub use crate::key_binds::MenuAction;
 
@@ -125,6 +125,9 @@ pub enum ViewMessage {
     ToggleSlideshow,
     ImageEditEvent,
     GalleryScrollTo(f32),
+    ToggleShapePopout,
+    ToggleTransformPopout,
+    ClosePopouts,
 }
 
 #[derive(Debug, Clone)]
@@ -169,4 +172,14 @@ pub enum EditMessage {
     SetUnderline(bool),
     SetAlignment(Horizontal),
     TextInput(String),
+    SetStrikethrough(bool),
+    SetPenMode(PenMode),
+    SetOpacity(f32),
+    SetFillMode(bool),
+    SetCropRatio(CropRatio),
+    CancelAnnotation,
+    OpenColorPicker,
+    CloseColorPicker,
+    SetCustomColor(Color),
+    ApplyCrop,
 }
