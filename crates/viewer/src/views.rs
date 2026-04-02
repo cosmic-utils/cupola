@@ -1,3 +1,4 @@
+pub mod annotation_toolbar;
 pub mod gallery;
 pub mod image_view_state;
 

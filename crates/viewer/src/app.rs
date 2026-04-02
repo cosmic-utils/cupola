@@ -42,6 +42,11 @@ use viewer_config::{AppTheme, ThumbnailSize, ViewerConfig, WallpaperBehavior};
 use viewer_image::edit::Transform;
 use viewer_image::{self as image, CachedImage, ImageCache, edit::EditState};
 use viewer_nav::{self as nav, NavState};
+use viewer_tools::ToolOperation;
+use viewer_tools::annotate::{
+    AnnotateColor, AnnotateTool, HighlighterPreview, PenPreview, PencilPreview, ShapeKind,
+    ShapePreview, TextPreview,
+};
 
 pub struct ImageViewer {
     core: Core,
@@ -62,6 +67,17 @@ pub struct ImageViewer {
     edit_state: EditState,
     _save_dialog: Option<PathBuf>,
     thumbnail_load_cursor: usize,
+    annotate_tool: AnnotateTool,
+    annotate_color: AnnotateColor,
+    annotate_stroke: f32,
+    text_bold: bool,
+    text_italic: bool,
+    text_underline: bool,
+    text_font_size: f32,
+    text_alignment: cosmic::iced::alignment::Horizontal,
+    is_annotating: bool,
+    committed_overlay: Option<cosmic::widget::image::Handle>,
+    preview_overlay: Option<cosmic::widget::image::Handle>,
 }
 
 impl ImageViewer {
@@ -344,22 +360,118 @@ impl ImageViewer {
         }
     }
 
+    fn create_preview_for_tool(&self, tool: AnnotateTool) -> Box<dyn ToolOperation> {
+        let color = self.annotate_color.0;
+        let width = self.annotate_stroke;
+        match tool {
+            AnnotateTool::Pen => Box::new(PenPreview::new(color, width)),
+            AnnotateTool::Pencil => Box::new(PencilPreview::new(color, width)),
+            AnnotateTool::Highlighter => Box::new(HighlighterPreview::new(color, width)),
+            AnnotateTool::Rectangle => {
+                Box::new(ShapePreview::new(ShapeKind::Rectangle, color, width))
+            }
+            AnnotateTool::Ellipse => {
+                Box::new(ShapePreview::new(ShapeKind::Ellipse, color, width))
+            }
+            AnnotateTool::Line => Box::new(ShapePreview::new(ShapeKind::Line, color, width)),
+            AnnotateTool::Arrow => Box::new(ShapePreview::new(ShapeKind::Arrow, color, width)),
+            AnnotateTool::Star => Box::new(ShapePreview::new(ShapeKind::Star, color, width)),
+            AnnotateTool::Polygon => {
+                Box::new(ShapePreview::new(ShapeKind::Polygon, color, width))
+            }
+            AnnotateTool::Text => Box::new(TextPreview::new(
+                color,
+                self.text_font_size,
+                "sans-serif",
+                self.text_bold,
+                self.text_italic,
+                self.text_underline,
+                self.text_alignment,
+            )),
+        }
+    }
+
+    fn auto_commits(&self, tool: AnnotateTool) -> bool {
+        matches!(
+            tool,
+            AnnotateTool::Pen
+                | AnnotateTool::Pencil
+                | AnnotateTool::Highlighter
+                | AnnotateTool::Rectangle
+                | AnnotateTool::Ellipse
+                | AnnotateTool::Line
+                | AnnotateTool::Arrow
+                | AnnotateTool::Star
+                | AnnotateTool::Polygon
+        )
+    }
+
+    fn render_committed_overlay(&mut self) {
+        let (w, h) = self.current_image_size();
+        if w == 0 || h == 0 {
+            self.committed_overlay = None;
+            return;
+        }
+        self.committed_overlay = render_operations_to_handle(&self.edit_state.operations, w, h, 1.0);
+    }
+
+    fn render_preview_overlay(&mut self) {
+        let (w, h) = self.current_image_size();
+        if w == 0 || h == 0 {
+            self.preview_overlay = None;
+            return;
+        }
+        if let Some(ref preview) = self.edit_state.active_preview {
+            let ops: Vec<&dyn ToolOperation> = vec![preview.as_ref()];
+            self.preview_overlay = render_ops_refs(&ops, w, h, 1.0);
+        } else {
+            self.preview_overlay = None;
+        }
+    }
+
+    fn current_image_size(&self) -> (u32, u32) {
+        if let Some(ref preview) = self.image_state.preview_image {
+            (preview.width, preview.height)
+        } else if let Some(path) = self.nav.current()
+            && let Some(cached) = self.cache.get_full(path)
+        {
+            (cached.width, cached.height)
+        } else {
+            (0, 0)
+        }
+    }
+
     fn save_edited_image(&mut self, save_path: PathBuf) -> Task<Message> {
         if let Some(original_path) = self.edit_state.original_path.as_ref() {
             let original = original_path.clone();
             let transforms = self.edit_state.transforms.clone();
             let crop = self.edit_state.crop;
             let result_path = save_path.clone();
+            let has_annotations = self.edit_state.has_operations();
+
+            // Collect committed operations for flattening during save.
+            // We render them to a pixmap, then composite onto the image.
+            let ops_data = if has_annotations {
+                // We need to render operations onto the image. Since ToolOperation
+                // isn't Send, we render to pixel data now and pass that to the async task.
+                let (w, h) = self.current_image_size();
+                render_operations_to_pixels(&self.edit_state.operations, w, h, 1.0)
+            } else {
+                None
+            };
 
             Task::perform(
                 async move {
-                    // Load and apply all edits
                     let result =
                         viewer_image::edit::apply_edits_to_image(&original, &transforms, crop)
                             .await;
 
                     match result {
-                        Ok((img, _, _, _, _)) => {
+                        Ok((mut img, _, _, _, _)) => {
+                            // Flatten annotation overlays
+                            if let Some((pixels, ow, oh)) = ops_data {
+                                composite_rgba_onto_image(&mut img, &pixels, ow, oh);
+                            }
                             viewer_image::edit::save_image(img, &save_path).await?;
                             Ok(result_path)
                         }
@@ -427,6 +539,17 @@ impl Application for ImageViewer {
             edit_state: EditState::new(),
             _save_dialog: None,
             thumbnail_load_cursor: 0,
+            annotate_tool: AnnotateTool::Pen,
+            annotate_color: AnnotateColor::default(),
+            annotate_stroke: 2.0,
+            text_bold: false,
+            text_italic: false,
+            text_underline: false,
+            text_font_size: 20.0,
+            text_alignment: cosmic::iced::alignment::Horizontal::Left,
+            is_annotating: false,
+            committed_overlay: None,
+            preview_overlay: None,
         };
 
         let startup_path = if let Some(path) = flags {
@@ -462,12 +585,29 @@ impl Application for ImageViewer {
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
+        let annotation = if self.is_annotating {
+            Some(crate::views::gallery::AnnotationOverlay {
+                tool: self.annotate_tool,
+                color: self.annotate_color,
+                stroke_width: self.annotate_stroke,
+                bold: self.text_bold,
+                italic: self.text_italic,
+                underline: self.text_underline,
+                font_size: self.text_font_size,
+                alignment: self.text_alignment,
+                committed: self.committed_overlay.clone(),
+                preview: self.preview_overlay.clone(),
+            })
+        } else {
+            None
+        };
         let gallery = self.gallery_view.view(
             &self.nav,
             &self.cache,
             self.config.thumbnail_size.pixels(),
             &self.image_state,
             &self.edit_state,
+            annotation,
         );
 
         // Overlay crop dialog if active (takes priority over other dialogs)
@@ -799,6 +939,11 @@ impl Application for ImageViewer {
                         self.image_state.fit_to_window = true;
                     }
 
+                    // Reset annotation state
+                    self.is_annotating = false;
+                    self.committed_overlay = None;
+                    self.preview_overlay = None;
+
                     // If a slideshow was playing, stop it
                     if self.is_slideshow_active {
                         self.is_slideshow_active = false;
@@ -1007,6 +1152,10 @@ impl Application for ImageViewer {
                             self.edit_state.reset();
                             // Clear the preview image after successful save
                             self.image_state.preview_image = None;
+                            // Reset annotation state
+                            self.is_annotating = false;
+                            self.committed_overlay = None;
+                            self.preview_overlay = None;
                             tasks.push(self.update_title().map(Action::from));
                         }
                         Err(err) => {
@@ -1064,22 +1213,155 @@ impl Application for ImageViewer {
                 EditMessage::CropDragEnd => {
                     self.edit_state.crop_selection.end_drag();
                 }
-                // Annotation variants — handled in Phase 6
-                EditMessage::Redo
-                | EditMessage::SetTool(_)
-                | EditMessage::SetColor(_)
-                | EditMessage::SetStrokeWidth(_)
-                | EditMessage::ToolStart(_)
-                | EditMessage::ToolDrag(_)
-                | EditMessage::ToolEnd
-                | EditMessage::CommitTool
-                | EditMessage::CancelTool
-                | EditMessage::SetFontSize(_)
-                | EditMessage::SetBold(_)
-                | EditMessage::SetItalic(_)
-                | EditMessage::SetUnderline(_)
-                | EditMessage::SetAlignment(_)
-                | EditMessage::TextInput(_) => {}
+                EditMessage::Redo => {
+                    if self.edit_state.redo() {
+                        self.render_committed_overlay();
+                        tasks.push(self.reload_with_edits().map(Action::from));
+                        tasks.push(self.update_title().map(Action::from));
+                    }
+                }
+                EditMessage::SetTool(tool) => {
+                    // Commit any in-progress preview before switching
+                    if self.edit_state.active_preview.is_some() && self.auto_commits(self.annotate_tool) {
+                        self.edit_state.commit_preview();
+                        self.render_committed_overlay();
+                    }
+                    self.annotate_tool = tool;
+                    self.edit_state.active_tool = Some(tool);
+
+                    if !self.is_annotating {
+                        self.is_annotating = true;
+                        if let Some(current_path) = self.nav.current()
+                            && !self.edit_state.is_editing()
+                        {
+                            self.edit_state.start_editing(current_path.clone());
+                        }
+                    }
+
+                    let preview = self.create_preview_for_tool(tool);
+                    self.edit_state.set_preview(preview);
+                    self.render_preview_overlay();
+                }
+                EditMessage::SetColor(color) => {
+                    self.annotate_color = color;
+                    // Update active preview color via downcast
+                    if let Some(ref mut preview) = self.edit_state.active_preview {
+                        if let Some(p) = preview.as_any_mut().downcast_mut::<PenPreview>() {
+                            p.color = color.0;
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<PencilPreview>() {
+                            p.color = color.0;
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<HighlighterPreview>() {
+                            p.color = color.0;
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>() {
+                            p.color = color.0;
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>() {
+                            p.color = color.0;
+                        }
+                    }
+                }
+                EditMessage::SetStrokeWidth(w) => {
+                    self.annotate_stroke = w;
+                    if let Some(ref mut preview) = self.edit_state.active_preview {
+                        if let Some(p) = preview.as_any_mut().downcast_mut::<PenPreview>() {
+                            p.width = w;
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<PencilPreview>() {
+                            p.width = w;
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<HighlighterPreview>() {
+                            p.width = w;
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>() {
+                            p.width = w;
+                        }
+                    }
+                }
+                EditMessage::ToolStart(point) => {
+                    let (w, h) = self.current_image_size();
+                    let img_size = cosmic::iced::Size::new(w as f32, h as f32);
+                    if let Some(ref mut preview) = self.edit_state.active_preview {
+                        preview.on_press(point, img_size);
+                    }
+                    self.render_preview_overlay();
+                }
+                EditMessage::ToolDrag(point) => {
+                    let (w, h) = self.current_image_size();
+                    let img_size = cosmic::iced::Size::new(w as f32, h as f32);
+                    if let Some(ref mut preview) = self.edit_state.active_preview {
+                        preview.on_drag(point, img_size);
+                    }
+                    self.render_preview_overlay();
+                }
+                EditMessage::ToolEnd => {
+                    let (w, h) = self.current_image_size();
+                    let img_size = cosmic::iced::Size::new(w as f32, h as f32);
+                    if let Some(ref mut preview) = self.edit_state.active_preview {
+                        preview.on_release(cosmic::iced::Point::ORIGIN, img_size);
+                    }
+                    if self.auto_commits(self.annotate_tool) {
+                        self.edit_state.commit_preview();
+                        self.render_committed_overlay();
+                        // Create fresh preview for next stroke
+                        let preview = self.create_preview_for_tool(self.annotate_tool);
+                        self.edit_state.set_preview(preview);
+                    }
+                    self.render_preview_overlay();
+                }
+                EditMessage::CommitTool => {
+                    self.edit_state.commit_preview();
+                    self.render_committed_overlay();
+                    self.preview_overlay = None;
+                    // Create fresh preview
+                    let preview = self.create_preview_for_tool(self.annotate_tool);
+                    self.edit_state.set_preview(preview);
+                }
+                EditMessage::CancelTool => {
+                    self.edit_state.cancel_tool();
+                    self.preview_overlay = None;
+                    // Create fresh preview
+                    let preview = self.create_preview_for_tool(self.annotate_tool);
+                    self.edit_state.set_preview(preview);
+                }
+                EditMessage::SetFontSize(s) => {
+                    self.text_font_size = s;
+                    if let Some(ref mut preview) = self.edit_state.active_preview
+                        && let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>()
+                    {
+                        p.font_size = s;
+                    }
+                }
+                EditMessage::SetBold(b) => {
+                    self.text_bold = b;
+                    if let Some(ref mut preview) = self.edit_state.active_preview
+                        && let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>()
+                    {
+                        p.bold = b;
+                    }
+                }
+                EditMessage::SetItalic(i) => {
+                    self.text_italic = i;
+                    if let Some(ref mut preview) = self.edit_state.active_preview
+                        && let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>()
+                    {
+                        p.italic = i;
+                    }
+                }
+                EditMessage::SetUnderline(u) => {
+                    self.text_underline = u;
+                    if let Some(ref mut preview) = self.edit_state.active_preview
+                        && let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>()
+                    {
+                        p.underline = u;
+                    }
+                }
+                EditMessage::SetAlignment(a) => {
+                    self.text_alignment = a;
+                    if let Some(ref mut preview) = self.edit_state.active_preview
+                        && let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>()
+                    {
+                        p.alignment = a;
+                    }
+                }
+                EditMessage::TextInput(_input) => {
+                    // Text input is handled by the TextPreview's internal editor
+                }
             },
             Message::Settings(msg) => {
                 match msg {
@@ -2137,6 +2419,103 @@ fn update_source_in_config(existing: &str, new_path: &str) -> String {
     }
 
     result
+}
+
+fn render_operations_to_pixels(
+    operations: &[Box<dyn ToolOperation>],
+    width: u32,
+    height: u32,
+    scale: f32,
+) -> Option<(Vec<u8>, u32, u32)> {
+    if operations.is_empty() || width == 0 || height == 0 {
+        return None;
+    }
+    let mut pixmap = tiny_skia::Pixmap::new(width, height)?;
+    let image_size = cosmic::iced::Size::new(width as f32, height as f32);
+    for op in operations {
+        op.render(&mut pixmap, image_size, scale);
+    }
+    Some((pixmap.data().to_vec(), width, height))
+}
+
+fn composite_rgba_onto_image(img: &mut ::image::DynamicImage, rgba: &[u8], w: u32, h: u32) {
+    use ::image::{GenericImage, GenericImageView};
+    let overlay = ::image::RgbaImage::from_raw(w, h, rgba.to_vec());
+    if let Some(overlay) = overlay {
+        let iw = img.width().min(w);
+        let ih = img.height().min(h);
+        for y in 0..ih {
+            for x in 0..iw {
+                let src = overlay.get_pixel(x, y);
+                if src[3] == 0 {
+                    continue;
+                }
+                let dst = img.get_pixel(x, y);
+                let blended = alpha_blend(dst, *src);
+                img.put_pixel(x, y, blended);
+            }
+        }
+    }
+}
+
+fn alpha_blend(dst: ::image::Rgba<u8>, src: ::image::Rgba<u8>) -> ::image::Rgba<u8> {
+    let sa = src[3] as f32 / 255.0;
+    let da = dst[3] as f32 / 255.0;
+    let out_a = sa + da * (1.0 - sa);
+    if out_a == 0.0 {
+        return ::image::Rgba([0, 0, 0, 0]);
+    }
+    let blend = |s: u8, d: u8| -> u8 {
+        ((s as f32 * sa + d as f32 * da * (1.0 - sa)) / out_a) as u8
+    };
+    ::image::Rgba([
+        blend(src[0], dst[0]),
+        blend(src[1], dst[1]),
+        blend(src[2], dst[2]),
+        (out_a * 255.0) as u8,
+    ])
+}
+
+fn render_operations_to_handle(
+    operations: &[Box<dyn ToolOperation>],
+    width: u32,
+    height: u32,
+    scale: f32,
+) -> Option<cosmic::widget::image::Handle> {
+    if operations.is_empty() {
+        return None;
+    }
+    let mut pixmap = tiny_skia::Pixmap::new(width, height)?;
+    let image_size = cosmic::iced::Size::new(width as f32, height as f32);
+    for op in operations {
+        op.render(&mut pixmap, image_size, scale);
+    }
+    Some(cosmic::widget::image::Handle::from_rgba(
+        width,
+        height,
+        pixmap.data().to_vec(),
+    ))
+}
+
+fn render_ops_refs(
+    operations: &[&dyn ToolOperation],
+    width: u32,
+    height: u32,
+    scale: f32,
+) -> Option<cosmic::widget::image::Handle> {
+    if operations.is_empty() {
+        return None;
+    }
+    let mut pixmap = tiny_skia::Pixmap::new(width, height)?;
+    let image_size = cosmic::iced::Size::new(width as f32, height as f32);
+    for op in operations {
+        op.render(&mut pixmap, image_size, scale);
+    }
+    Some(cosmic::widget::image::Handle::from_rgba(
+        width,
+        height,
+        pixmap.data().to_vec(),
+    ))
 }
 
 fn key_press_handler(key: Key, modifiers: Modifiers) -> Option<Message> {
