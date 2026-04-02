@@ -1,0 +1,12 @@
+[package]
+version.workspace = true
+name = "viewer-tools"
+description.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+libcosmic.workspace = true
+image.workspace = true
+thiserror.workspace = true
+tiny-skia = "0.12.0"

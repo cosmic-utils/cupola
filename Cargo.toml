@@ -8,6 +8,7 @@ members = [
     "crates/viewer-image",
     "crates/viewer-nav",
     "crates/viewer-types",
+    "crates/viewer-tools",
     "crates/viewer-widgets"
 ]
 
