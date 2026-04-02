@@ -8,4 +8,6 @@ pub use tool::{
     pen::{PenOperation, PenPreview},
     pencil::{PencilOperation, PencilPreview},
     shapes::{ShapeKind, ShapeOperation, ShapePreview},
+    text::{TextDragHandle, TextOperation, TextPreview, TextSpan},
+    text::preview::TextEditState,
 };

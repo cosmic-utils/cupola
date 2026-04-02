@@ -6258,7 +6258,6 @@ version = "0.2.0"
 dependencies = [
  "image",
  "libcosmic",
- "thiserror 2.0.17",
  "tiny-skia 0.12.0",
 ]
 
