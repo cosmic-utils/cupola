@@ -81,6 +81,12 @@ pub struct ImageViewer {
     shape_fill_mode: bool,
     crop_ratio: CropRatio,
     color_picker_open: bool,
+    picker_hue: f32,
+    picker_sat: f32,
+    picker_bright: f32,
+    picker_alpha: f32,
+    picker_hex: String,
+    recent_colors: Vec<cosmic::iced::Color>,
     shape_popout_open: bool,
     transform_popout_open: bool,
     active_shape: AnnotateTool,
@@ -616,6 +622,12 @@ impl Application for ImageViewer {
             shape_fill_mode: false,
             crop_ratio: CropRatio::default(),
             color_picker_open: false,
+            picker_hue: 0.0,
+            picker_sat: 1.0,
+            picker_bright: 1.0,
+            picker_alpha: 1.0,
+            picker_hex: String::from("ff0000"),
+            recent_colors: Vec::new(),
             shape_popout_open: false,
             transform_popout_open: false,
             active_shape: AnnotateTool::Rectangle,
@@ -1410,7 +1422,37 @@ impl Application for ImageViewer {
                             p.color = color;
                         }
                     }
+                    self.recent_colors.retain(|&c| {
+                        (c.r - color.r).abs() > 0.001
+                            || (c.g - color.g).abs() > 0.001
+                            || (c.b - color.b).abs() > 0.001
+                    });
+                    self.recent_colors.insert(0, color);
+                    self.recent_colors.truncate(8);
                     self.color_picker_open = false;
+                }
+                EditMessage::PickerHueSat(h, s) => {
+                    self.picker_hue = h;
+                    self.picker_sat = s;
+                    let color = viewer_widgets::hsb_to_color(h, s, self.picker_bright, self.picker_alpha);
+                    self.picker_hex = viewer_widgets::color_to_hex(color);
+                }
+                EditMessage::PickerBrightness(b) => {
+                    self.picker_bright = b;
+                    let color = viewer_widgets::hsb_to_color(self.picker_hue, self.picker_sat, b, self.picker_alpha);
+                    self.picker_hex = viewer_widgets::color_to_hex(color);
+                }
+                EditMessage::PickerAlpha(a) => {
+                    self.picker_alpha = a;
+                }
+                EditMessage::PickerHexInput(hex) => {
+                    self.picker_hex = hex.clone();
+                    if let Some(color) = viewer_widgets::hex_to_color(&hex) {
+                        self.picker_hue = 0.0;
+                        self.picker_sat = 0.0;
+                        self.picker_bright = color.r.max(color.g).max(color.b);
+                        self.picker_alpha = color.a;
+                    }
                 }
                 EditMessage::ApplyCrop => {
                     self.edit_state.commit_preview();

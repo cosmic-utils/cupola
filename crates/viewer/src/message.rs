@@ -183,5 +183,9 @@ pub enum EditMessage {
     OpenColorPicker,
     CloseColorPicker,
     SetCustomColor(Color),
+    PickerHueSat(f32, f32),
+    PickerBrightness(f32),
+    PickerAlpha(f32),
+    PickerHexInput(String),
     ApplyCrop,
 }
