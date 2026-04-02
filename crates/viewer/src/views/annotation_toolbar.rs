@@ -57,13 +57,22 @@ fn tool_btn(tool: AnnotateTool, active: AnnotateTool) -> Element<'static, Messag
     tooltip::tooltip(btn, text::body(tip), tooltip::Position::Right).into()
 }
 
+/// Click sets the tool. If already active, toggles the popout menu.
 fn popout_btn(
     tool: AnnotateTool,
     active: AnnotateTool,
-    msg: Message,
+    popout_msg: Message,
 ) -> Element<'static, Message> {
     let tip = format!("{} ({})", tool.display_name(), tool.shortcut_key());
     let ic = icon::from_name(tool.icon_name()).size(ICON_SIZE);
+    let is_active = tool == active;
+
+    // Click sets the tool if not active, toggles popout if already active
+    let msg = if is_active {
+        popout_msg
+    } else {
+        Message::Edit(EditMessage::SetTool(tool))
+    };
 
     let indicator = text::body("\u{25B8}").size(8);
     let overlay = cosmic::iced_widget::stack![
@@ -71,7 +80,7 @@ fn popout_btn(
             .width(Length::Fixed(BTN_SIZE))
             .height(Length::Fixed(BTN_SIZE))
             .on_press(msg)
-            .class(if tool == active {
+            .class(if is_active {
                 theme::Button::Suggested
             } else {
                 theme::Button::Icon
@@ -345,29 +354,6 @@ pub fn tool_strip(props: &AnnotationProps) -> Element<'static, Message> {
         .push(tool_btn(AnnotateTool::Crop, active));
 
     strip = strip.push(vertical_space());
-    strip = strip.push(divider());
-
-    // Image flip at bottom
-    strip = strip.push(
-        tooltip::tooltip(
-            button::icon(icon::from_name("object-flip-horizontal-symbolic").size(ICON_SIZE))
-                .width(Length::Fixed(BTN_SIZE))
-                .height(Length::Fixed(BTN_SIZE))
-                .on_press(Message::Edit(EditMessage::FlipHorizontal)),
-            text::body("Flip Horizontal"),
-            tooltip::Position::Right,
-        ),
-    );
-    strip = strip.push(
-        tooltip::tooltip(
-            button::icon(icon::from_name("object-flip-vertical-symbolic").size(ICON_SIZE))
-                .width(Length::Fixed(BTN_SIZE))
-                .height(Length::Fixed(BTN_SIZE))
-                .on_press(Message::Edit(EditMessage::FlipVertical)),
-            text::body("Flip Vertical"),
-            tooltip::Position::Right,
-        ),
-    );
 
     let strip_container = container(strip)
         .padding(spacing.space_xxs)
