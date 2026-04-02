@@ -41,6 +41,7 @@ menu-rotate-180 = Rotate 180°
 menu-flip-horizontal = Flip Horizontal
 menu-flip-vertical = Flip Vertical
 menu-crop = Crop
+menu-annotate = Annotate
 crop-apply = Apply Crop
 crop-cancel = Cancel
 menu-undo = Undo

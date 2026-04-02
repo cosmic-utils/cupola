@@ -149,14 +149,31 @@ impl GalleryView {
         .height(Length::Fill)
         .center_y(Length::Fill);
 
+        let annotate_btn = button::icon(icon::from_name("edit-symbolic"))
+            .on_press(Message::Edit(EditMessage::SetTool(
+                viewer_tools::annotate::AnnotateTool::Pen,
+            )))
+            .padding(spacing.space_xs)
+            .class(theme::Button::Standard);
+
+        let crop_btn = button::icon(icon::from_name("edit-cut-symbolic"))
+            .on_press(Message::Edit(EditMessage::SetTool(
+                viewer_tools::annotate::AnnotateTool::Crop,
+            )))
+            .padding(spacing.space_xs)
+            .class(theme::Button::Standard);
+
         let close_btn = button::icon(icon::from_name("window-close-symbolic"))
             .on_press(Message::View(ViewMessage::CloseModal))
             .padding(spacing.space_xs)
             .class(theme::Button::Destructive);
 
         let header = row()
+            .push(annotate_btn)
+            .push(crop_btn)
             .push(horizontal_space())
             .push(close_btn)
+            .spacing(spacing.space_xxs)
             .width(Length::Fill)
             .padding(spacing.space_xs);
 

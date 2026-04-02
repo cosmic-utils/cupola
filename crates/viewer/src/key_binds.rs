@@ -40,6 +40,7 @@ pub enum MenuAction {
     FlipHorizontal,
     FlipVertical,
     StartCrop,
+    Annotate,
     Save,
     SaveAs,
     Undo,
@@ -83,6 +84,9 @@ impl MenuAction {
             MenuAction::FlipVertical => Message::Edit(EditMessage::FlipVertical),
             MenuAction::StartCrop => {
                 Message::Edit(EditMessage::SetTool(AnnotateTool::Crop))
+            }
+            MenuAction::Annotate => {
+                Message::Edit(EditMessage::SetTool(AnnotateTool::Pen))
             }
             MenuAction::Save => Message::Edit(EditMessage::Save),
             MenuAction::SaveAs => Message::Edit(EditMessage::SaveAs),

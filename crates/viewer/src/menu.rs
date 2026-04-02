@@ -109,6 +109,7 @@ pub fn menu_bar<'a>(
                         ),
                         menu::Item::divider(),
                         menu::Item::button(fl!("menu-crop"), None, MenuAction::StartCrop),
+                        menu::Item::button(fl!("menu-annotate"), None, MenuAction::Annotate),
                         menu::Item::divider(),
                         menu::Item::button(fl!("menu-undo"), None, MenuAction::Undo),
                     ],
