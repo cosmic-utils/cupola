@@ -83,8 +83,8 @@ impl<'a, Message> AnnotationWidget<'a, Message> {
     }
 
     fn image_rect(&self, bounds: Rectangle) -> Rectangle {
-        let fit_scale = (bounds.width / self.img_width as f32)
-            .min(bounds.height / self.img_height as f32);
+        let fit_scale =
+            (bounds.width / self.img_width as f32).min(bounds.height / self.img_height as f32);
         let effective_scale = self.zoom * fit_scale;
 
         let img_w = self.img_width as f32 * effective_scale;
@@ -100,8 +100,8 @@ impl<'a, Message> AnnotationWidget<'a, Message> {
     }
 
     fn screen_to_image(&self, bounds: Rectangle, screen_point: Point) -> Point {
-        let fit_scale = (bounds.width / self.img_width as f32)
-            .min(bounds.height / self.img_height as f32);
+        let fit_scale =
+            (bounds.width / self.img_width as f32).min(bounds.height / self.img_height as f32);
         let effective_scale = self.zoom * fit_scale;
 
         let center_x = bounds.x + bounds.width / 2.0;
@@ -116,7 +116,9 @@ impl<'a, Message> AnnotationWidget<'a, Message> {
     }
 }
 
-impl<'a, Message: Clone> Widget<Message, cosmic::Theme, Renderer> for AnnotationWidget<'a, Message> {
+impl<'a, Message: Clone> Widget<Message, cosmic::Theme, Renderer>
+    for AnnotationWidget<'a, Message>
+{
     fn size(&self) -> Size<Length> {
         Size::new(Length::Fill, Length::Fill)
     }
@@ -200,24 +202,22 @@ impl<'a, Message: Clone> Widget<Message, cosmic::Theme, Renderer> for Annotation
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                if self.is_dragging.get()
-                    && let Some(pos) = cursor.position()
-                {
-                    let img_pt = self.screen_to_image(bounds, pos);
-                    if let Some(ref cb) = self.on_tool_drag {
+                if let Some(pos) = cursor.position() {
+                    let img_rect = self.image_rect(bounds);
+                    if img_rect.contains(pos)
+                        && let Some(ref cb) = self.on_tool_drag
+                    {
+                        let img_pt = self.screen_to_image(bounds, pos);
                         shell.publish(cb(img_pt));
                     }
                     return Status::Captured;
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(Button::Left)) => {
-                if self.is_dragging.get() {
-                    self.is_dragging.set(false);
-                    if let Some(ref cb) = self.on_tool_end {
-                        shell.publish(cb());
-                    }
-                    return Status::Captured;
+                if let Some(ref cb) = self.on_tool_end {
+                    shell.publish(cb());
                 }
+                return Status::Captured;
             }
             _ => {}
         }

@@ -6280,6 +6280,7 @@ dependencies = [
  "libcosmic",
  "shared",
  "taffy",
+ "tiny-skia 0.12.0",
  "viewer-types",
 ]
 

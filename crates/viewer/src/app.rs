@@ -5,8 +5,8 @@ use crate::{
     key_binds::{self, MenuAction},
     menu::menu_bar,
     message::{
-        ContextPage, DeleteAction, EditMessage, ImageMessage, Message, NavMessage,
-        SettingsMessage, ViewMessage,
+        ContextPage, DeleteAction, EditMessage, ImageMessage, Message, NavMessage, SettingsMessage,
+        ViewMessage,
     },
     views::{GalleryView, ImageViewState, annotation_page, annotation_toolbar::AnnotationProps},
     watcher,
@@ -70,6 +70,7 @@ pub struct ImageViewer {
     annotate_tool: AnnotateTool,
     annotate_color: AnnotateColor,
     annotate_stroke: f32,
+    canvas_dragging: bool,
     text_bold: bool,
     text_italic: bool,
     text_underline: bool,
@@ -390,15 +391,11 @@ impl ImageViewer {
             AnnotateTool::Rectangle => {
                 Box::new(ShapePreview::new(ShapeKind::Rectangle, color, width))
             }
-            AnnotateTool::Ellipse => {
-                Box::new(ShapePreview::new(ShapeKind::Ellipse, color, width))
-            }
+            AnnotateTool::Ellipse => Box::new(ShapePreview::new(ShapeKind::Ellipse, color, width)),
             AnnotateTool::Line => Box::new(ShapePreview::new(ShapeKind::Line, color, width)),
             AnnotateTool::Arrow => Box::new(ShapePreview::new(ShapeKind::Arrow, color, width)),
             AnnotateTool::Star => Box::new(ShapePreview::new(ShapeKind::Star, color, width)),
-            AnnotateTool::Polygon => {
-                Box::new(ShapePreview::new(ShapeKind::Polygon, color, width))
-            }
+            AnnotateTool::Polygon => Box::new(ShapePreview::new(ShapeKind::Polygon, color, width)),
             AnnotateTool::Text => Box::new(TextPreview::new(
                 color,
                 self.text_font_size,
@@ -489,7 +486,8 @@ impl ImageViewer {
             self.committed_overlay = None;
             return;
         }
-        self.committed_overlay = render_operations_to_handle(&self.edit_state.operations, w, h, 1.0);
+        self.committed_overlay =
+            render_operations_to_handle(&self.edit_state.operations, w, h, 1.0);
     }
 
     fn render_preview_overlay(&mut self) {
@@ -619,6 +617,7 @@ impl Application for ImageViewer {
             annotate_tool: AnnotateTool::Pen,
             annotate_color: AnnotateColor::default(),
             annotate_stroke: 2.0,
+            canvas_dragging: false,
             text_bold: false,
             text_italic: false,
             text_underline: false,
@@ -1257,7 +1256,9 @@ impl Application for ImageViewer {
                     }
 
                     // Commit any in-progress preview before switching
-                    if self.edit_state.active_preview.is_some() && self.auto_commits(self.annotate_tool) {
+                    if self.edit_state.active_preview.is_some()
+                        && self.auto_commits(self.annotate_tool)
+                    {
                         self.edit_state.commit_preview();
                         self.render_committed_overlay();
                     }
@@ -1283,9 +1284,12 @@ impl Application for ImageViewer {
                     if let Some(ref mut preview) = self.edit_state.active_preview {
                         if let Some(p) = preview.as_any_mut().downcast_mut::<PenPreview>() {
                             p.color = color.0;
-                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<HighlighterPreview>() {
+                        } else if let Some(p) =
+                            preview.as_any_mut().downcast_mut::<HighlighterPreview>()
+                        {
                             p.color = color.0;
-                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>() {
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>()
+                        {
                             p.color = color.0;
                         } else if let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>() {
                             p.color = color.0;
@@ -1297,14 +1301,18 @@ impl Application for ImageViewer {
                     if let Some(ref mut preview) = self.edit_state.active_preview {
                         if let Some(p) = preview.as_any_mut().downcast_mut::<PenPreview>() {
                             p.width = w;
-                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<HighlighterPreview>() {
+                        } else if let Some(p) =
+                            preview.as_any_mut().downcast_mut::<HighlighterPreview>()
+                        {
                             p.width = w;
-                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>() {
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>()
+                        {
                             p.width = w;
                         }
                     }
                 }
                 EditMessage::ToolStart(point) => {
+                    self.canvas_dragging = true;
                     let (w, h) = self.current_image_size();
                     let img_size = cosmic::iced::Size::new(w as f32, h as f32);
                     if let Some(ref mut preview) = self.edit_state.active_preview {
@@ -1313,6 +1321,9 @@ impl Application for ImageViewer {
                     self.render_preview_overlay();
                 }
                 EditMessage::ToolDrag(point) => {
+                    if !self.canvas_dragging {
+                        return Task::none();
+                    }
                     let (w, h) = self.current_image_size();
                     let img_size = cosmic::iced::Size::new(w as f32, h as f32);
                     if let Some(ref mut preview) = self.edit_state.active_preview {
@@ -1321,6 +1332,10 @@ impl Application for ImageViewer {
                     self.render_preview_overlay();
                 }
                 EditMessage::ToolEnd => {
+                    if !self.canvas_dragging {
+                        return Task::none();
+                    }
+                    self.canvas_dragging = false;
                     let (w, h) = self.current_image_size();
                     let img_size = cosmic::iced::Size::new(w as f32, h as f32);
                     if let Some(ref mut preview) = self.edit_state.active_preview {
@@ -1432,9 +1447,12 @@ impl Application for ImageViewer {
                     if let Some(ref mut preview) = self.edit_state.active_preview {
                         if let Some(p) = preview.as_any_mut().downcast_mut::<PenPreview>() {
                             p.color = color;
-                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<HighlighterPreview>() {
+                        } else if let Some(p) =
+                            preview.as_any_mut().downcast_mut::<HighlighterPreview>()
+                        {
                             p.color = color;
-                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>() {
+                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>()
+                        {
                             p.color = color;
                         } else if let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>() {
                             p.color = color;
@@ -1452,12 +1470,18 @@ impl Application for ImageViewer {
                 EditMessage::PickerHueSat(h, s) => {
                     self.picker_hue = h;
                     self.picker_sat = s;
-                    let color = viewer_widgets::hsb_to_color(h, s, self.picker_bright, self.picker_alpha);
+                    let color =
+                        viewer_widgets::hsv_to_color(h, s, self.picker_bright, self.picker_alpha);
                     self.picker_hex = viewer_widgets::color_to_hex(color);
                 }
                 EditMessage::PickerBrightness(b) => {
                     self.picker_bright = b;
-                    let color = viewer_widgets::hsb_to_color(self.picker_hue, self.picker_sat, b, self.picker_alpha);
+                    let color = viewer_widgets::hsv_to_color(
+                        self.picker_hue,
+                        self.picker_sat,
+                        b,
+                        self.picker_alpha,
+                    );
                     self.picker_hex = viewer_widgets::color_to_hex(color);
                 }
                 EditMessage::PickerAlpha(a) => {
@@ -1488,7 +1512,10 @@ impl Application for ImageViewer {
                     });
                 }
                 EditMessage::PopoutRelease(tool) => {
-                    eprintln!("[popout] release: {tool:?}, pressed={:?}", self.popout_pressed);
+                    eprintln!(
+                        "[popout] release: {tool:?}, pressed={:?}",
+                        self.popout_pressed
+                    );
                     if self.popout_pressed == Some(tool) {
                         self.popout_pressed = None;
                         self.shape_popout_open = false;
@@ -1498,7 +1525,10 @@ impl Application for ImageViewer {
                     self.popout_pressed = None;
                 }
                 EditMessage::PopoutTimerFired(tool) => {
-                    eprintln!("[popout] timer fired: {tool:?}, pressed={:?}", self.popout_pressed);
+                    eprintln!(
+                        "[popout] timer fired: {tool:?}, pressed={:?}",
+                        self.popout_pressed
+                    );
                     if self.popout_pressed == Some(tool) {
                         self.popout_pressed = None;
                         match tool {
@@ -2597,9 +2627,8 @@ fn alpha_blend(dst: ::image::Rgba<u8>, src: ::image::Rgba<u8>) -> ::image::Rgba<
     if out_a == 0.0 {
         return ::image::Rgba([0, 0, 0, 0]);
     }
-    let blend = |s: u8, d: u8| -> u8 {
-        ((s as f32 * sa + d as f32 * da * (1.0 - sa)) / out_a) as u8
-    };
+    let blend =
+        |s: u8, d: u8| -> u8 { ((s as f32 * sa + d as f32 * da * (1.0 - sa)) / out_a) as u8 };
     ::image::Rgba([
         blend(src[0], dst[0]),
         blend(src[1], dst[1]),

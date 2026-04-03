@@ -18,3 +18,4 @@ libcosmic.workspace = true
 # Widgets dependencies
 taffy.workspace = true
 imageproc.workspace = true
+tiny-skia = "0.12.0"

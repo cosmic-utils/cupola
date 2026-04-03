@@ -1,6 +1,9 @@
 use crate::{
     message::{EditMessage, Message},
-    views::{ImageViewState, annotation_toolbar::{self, AnnotationProps}},
+    views::{
+        ImageViewState,
+        annotation_toolbar::{self, AnnotationProps},
+    },
 };
 
 use cosmic::{
