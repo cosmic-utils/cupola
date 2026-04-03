@@ -64,7 +64,8 @@ impl GalleryView {
         let close_btn = button::icon(icon::from_name("window-close-symbolic"))
             .on_press(Message::View(ViewMessage::CloseModal))
             .padding(spacing.space_xs)
-            .class(theme::Button::Destructive);
+            .class(theme::Button::Destructive)
+            .description("Close");
 
         let header = row()
             .push(horizontal_space())
@@ -120,7 +121,8 @@ impl GalleryView {
 
         let prev_btn = container(
             button::icon(icon::from_name("go-previous-symbolic"))
-                .on_press(Message::Nav(NavMessage::Prev)),
+                .on_press(Message::Nav(NavMessage::Prev))
+                .description("Previous Image"),
         )
         .width(Length::Shrink)
         .height(Length::Fill)
@@ -128,7 +130,8 @@ impl GalleryView {
 
         let next_btn = container(
             button::icon(icon::from_name("go-next-symbolic"))
-                .on_press(Message::Nav(NavMessage::Next)),
+                .on_press(Message::Nav(NavMessage::Next))
+                .description("Next Image"),
         )
         .width(Length::Shrink)
         .height(Length::Fill)
@@ -139,19 +142,22 @@ impl GalleryView {
                 viewer_tools::annotate::AnnotateTool::Pen,
             )))
             .padding(spacing.space_xs)
-            .class(theme::Button::Standard);
+            .class(theme::Button::Standard)
+            .description("Annotate");
 
         let crop_btn = button::icon(icon::from_name("edit-cut-symbolic"))
             .on_press(Message::Edit(EditMessage::SetTool(
                 viewer_tools::annotate::AnnotateTool::Crop,
             )))
             .padding(spacing.space_xs)
-            .class(theme::Button::Standard);
+            .class(theme::Button::Standard)
+            .description("Crop");
 
         let close_btn = button::icon(icon::from_name("window-close-symbolic"))
             .on_press(Message::View(ViewMessage::CloseModal))
             .padding(spacing.space_xs)
-            .class(theme::Button::Destructive);
+            .class(theme::Button::Destructive)
+            .description("Close");
 
         let header = row()
             .push(annotate_btn)
@@ -224,7 +230,8 @@ impl GalleryView {
             .push(
                 button::icon(icon::from_name("zoom-out-symbolic"))
                     .on_press(Message::View(ViewMessage::ZoomOut))
-                    .padding(spacing.space_xs),
+                    .padding(spacing.space_xs)
+                    .description("Zoom Out"),
             )
             .push(if fit_to_window {
                 container(text::body(format!(
@@ -242,12 +249,14 @@ impl GalleryView {
             .push(
                 button::icon(icon::from_name("zoom-in-symbolic"))
                     .on_press(Message::View(ViewMessage::ZoomIn))
-                    .padding(spacing.space_xs),
+                    .padding(spacing.space_xs)
+                    .description("Zoom In"),
             )
             .push(
                 button::icon(icon::from_name("zoom-fit-best-symbolic"))
                     .on_press(Message::View(ViewMessage::ZoomFit))
-                    .padding(spacing.space_xs),
+                    .padding(spacing.space_xs)
+                    .description("Fit to Window"),
             )
             .spacing(spacing.space_xs)
             .align_y(Alignment::Center);

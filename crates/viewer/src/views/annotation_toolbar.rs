@@ -55,10 +55,12 @@ pub struct AnnotationProps {
 
 fn tool_btn(tool: AnnotateTool, active: AnnotateTool) -> Element<'static, Message> {
     let ic = icon::from_name(tool.icon_name()).size(ICON_SIZE);
+    let desc = format!("{} ({})", tool.display_name(), tool.shortcut_key());
     let mut btn = button::icon(ic)
         .width(Length::Fixed(BTN_SIZE))
         .height(Length::Fixed(BTN_SIZE))
-        .on_press(Message::Edit(EditMessage::SetTool(tool)));
+        .on_press(Message::Edit(EditMessage::SetTool(tool)))
+        .description(desc);
     if tool == active {
         btn = btn.class(theme::Button::Suggested);
     }
@@ -124,9 +126,11 @@ fn stroke_btn(width: f32, active_width: f32) -> Element<'static, Message> {
         4 => "\u{2501}",
         _ => "\u{2588}",
     };
+    let desc = format!("Stroke Width {width:.0}");
     let active = (width - active_width).abs() < 0.5;
-    let mut btn =
-        button::standard(label).on_press(Message::Edit(EditMessage::SetStrokeWidth(width)));
+    let mut btn = button::standard(label)
+        .on_press(Message::Edit(EditMessage::SetStrokeWidth(width)))
+        .description(desc);
     if active {
         btn = btn.class(theme::Button::Suggested);
     }
@@ -166,7 +170,8 @@ fn color_plus(color: AnnotateColor) -> Element<'static, Message> {
         .push(color_btn(color))
         .push(
             button::icon(icon::from_name("list-add-symbolic").size(14))
-                .on_press(Message::Edit(EditMessage::OpenColorPicker)),
+                .on_press(Message::Edit(EditMessage::OpenColorPicker))
+                .description("Color Picker"),
         )
         .into()
 }
@@ -183,31 +188,27 @@ fn vdivider() -> Element<'static, Message> {
 
 fn right_actions(can_undo: bool, can_redo: bool) -> Element<'static, Message> {
     let undo = {
-        let mut btn = button::icon(icon::from_name("edit-undo-symbolic").size(16));
+        let mut btn = button::icon(icon::from_name("edit-undo-symbolic").size(16))
+            .description("Undo");
         if can_undo {
             btn = btn.on_press(Message::Edit(EditMessage::Undo));
         }
-        tooltip::tooltip(btn, text::body("Undo"), tooltip::Position::Bottom)
+        btn
     };
     let redo = {
-        let mut btn = button::icon(icon::from_name("edit-redo-symbolic").size(16));
+        let mut btn = button::icon(icon::from_name("edit-redo-symbolic").size(16))
+            .description("Redo");
         if can_redo {
             btn = btn.on_press(Message::Edit(EditMessage::Redo));
         }
-        tooltip::tooltip(btn, text::body("Redo"), tooltip::Position::Bottom)
+        btn
     };
-    let save = tooltip::tooltip(
-        button::icon(icon::from_name("document-save-symbolic").size(16))
-            .on_press(Message::Edit(EditMessage::Save)),
-        text::body("Save"),
-        tooltip::Position::Bottom,
-    );
-    let cancel = tooltip::tooltip(
-        button::icon(icon::from_name("window-close-symbolic").size(16))
-            .on_press(Message::Edit(EditMessage::CancelAnnotation)),
-        text::body("Cancel"),
-        tooltip::Position::Bottom,
-    );
+    let save = button::icon(icon::from_name("document-save-symbolic").size(16))
+        .on_press(Message::Edit(EditMessage::Save))
+        .description("Save");
+    let cancel = button::icon(icon::from_name("window-close-symbolic").size(16))
+        .on_press(Message::Edit(EditMessage::CancelAnnotation))
+        .description("Cancel");
 
     row()
         .spacing(4)
@@ -228,28 +229,19 @@ fn image_actions() -> Element<'static, Message> {
     row()
         .spacing(4)
         .push(
-            tooltip::tooltip(
-                button::icon(icon::from_name("object-flip-horizontal-symbolic").size(16))
-                    .on_press(Message::Edit(EditMessage::FlipHorizontal)),
-                text::body("Flip Horizontal"),
-                tooltip::Position::Bottom,
-            ),
+            button::icon(icon::from_name("object-flip-horizontal-symbolic").size(16))
+                .on_press(Message::Edit(EditMessage::FlipHorizontal))
+                .description("Flip Horizontal"),
         )
         .push(
-            tooltip::tooltip(
-                button::icon(icon::from_name("object-flip-vertical-symbolic").size(16))
-                    .on_press(Message::Edit(EditMessage::FlipVertical)),
-                text::body("Flip Vertical"),
-                tooltip::Position::Bottom,
-            ),
+            button::icon(icon::from_name("object-flip-vertical-symbolic").size(16))
+                .on_press(Message::Edit(EditMessage::FlipVertical))
+                .description("Flip Vertical"),
         )
         .push(
-            tooltip::tooltip(
-                button::icon(icon::from_name("object-rotate-right-symbolic").size(16))
-                    .on_press(Message::Edit(EditMessage::Rotate90)),
-                text::body("Rotate 90\u{00B0}"),
-                tooltip::Position::Bottom,
-            ),
+            button::icon(icon::from_name("object-rotate-right-symbolic").size(16))
+                .on_press(Message::Edit(EditMessage::Rotate90))
+                .description("Rotate Right"),
         )
         .into()
 }
