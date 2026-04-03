@@ -20,6 +20,7 @@ const STROKE_THIN: f32 = 2.0;
 const STROKE_MED: f32 = 4.0;
 const STROKE_THICK: f32 = 8.0;
 
+#[derive(Clone)]
 pub struct AnnotationProps {
     pub tool: AnnotateTool,
     pub color: AnnotateColor,
@@ -41,6 +42,13 @@ pub struct AnnotationProps {
     pub active_transform: TransformSubTool,
     pub shape_popout_open: bool,
     pub transform_popout_open: bool,
+    pub color_picker_open: bool,
+    pub picker_hue: f32,
+    pub picker_sat: f32,
+    pub picker_bright: f32,
+    pub picker_alpha: f32,
+    pub picker_hex: String,
+    pub recent_colors: Vec<cosmic::iced::Color>,
 }
 
 // --- Helpers ---

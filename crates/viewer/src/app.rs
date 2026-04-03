@@ -448,13 +448,20 @@ impl ImageViewer {
             active_transform: self.active_transform,
             shape_popout_open: self.shape_popout_open,
             transform_popout_open: self.transform_popout_open,
+            color_picker_open: self.color_picker_open,
+            picker_hue: self.picker_hue,
+            picker_sat: self.picker_sat,
+            picker_bright: self.picker_bright,
+            picker_alpha: self.picker_alpha,
+            picker_hex: self.picker_hex.clone(),
+            recent_colors: self.recent_colors.clone(),
         };
 
         if let Some(ref preview) = self.image_state.preview_image {
             return annotation_page(
                 preview,
                 &self.image_state,
-                &props,
+                props.clone(),
                 self.committed_overlay.as_ref(),
                 self.preview_overlay.as_ref(),
             );
@@ -467,7 +474,7 @@ impl ImageViewer {
             return annotation_page(
                 &cached,
                 &self.image_state,
-                &props,
+                props.clone(),
                 self.committed_overlay.as_ref(),
                 self.preview_overlay.as_ref(),
             );
@@ -1240,6 +1247,15 @@ impl Application for ImageViewer {
                     }
                 }
                 EditMessage::SetTool(tool) => {
+                    // Close any open popouts
+                    self.shape_popout_open = false;
+                    self.transform_popout_open = false;
+
+                    // Track which shape/transform sub-tool was selected
+                    if AnnotateTool::shape_tools().contains(&tool) {
+                        self.active_shape = tool;
+                    }
+
                     // Commit any in-progress preview before switching
                     if self.edit_state.active_preview.is_some() && self.auto_commits(self.annotate_tool) {
                         self.edit_state.commit_preview();
@@ -1464,16 +1480,16 @@ impl Application for ImageViewer {
                     self.edit_state.set_preview(preview);
                 }
                 EditMessage::PopoutPress(tool) => {
+                    eprintln!("[popout] press: {tool:?}");
                     self.popout_pressed = Some(tool);
-                    // Start 300ms timer — if it fires before release, open popout
                     return cosmic::task::future(async move {
                         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
                         Message::Edit(EditMessage::PopoutTimerFired(tool))
                     });
                 }
                 EditMessage::PopoutRelease(tool) => {
+                    eprintln!("[popout] release: {tool:?}, pressed={:?}", self.popout_pressed);
                     if self.popout_pressed == Some(tool) {
-                        // Released before timer — quick click, set the tool
                         self.popout_pressed = None;
                         self.shape_popout_open = false;
                         self.transform_popout_open = false;
@@ -1482,21 +1498,25 @@ impl Application for ImageViewer {
                     self.popout_pressed = None;
                 }
                 EditMessage::PopoutTimerFired(tool) => {
+                    eprintln!("[popout] timer fired: {tool:?}, pressed={:?}", self.popout_pressed);
                     if self.popout_pressed == Some(tool) {
-                        // Still held — open the popout
                         self.popout_pressed = None;
                         match tool {
                             t if AnnotateTool::shape_tools().contains(&t)
                                 || t == self.active_shape =>
                             {
+                                eprintln!("[popout] opening shape popout");
                                 self.shape_popout_open = true;
                                 self.transform_popout_open = false;
                             }
                             AnnotateTool::Transform => {
+                                eprintln!("[popout] opening transform popout");
                                 self.transform_popout_open = true;
                                 self.shape_popout_open = false;
                             }
-                            _ => {}
+                            _ => {
+                                eprintln!("[popout] no popout for {tool:?}");
+                            }
                         }
                     }
                 }

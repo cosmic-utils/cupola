@@ -58,20 +58,20 @@ pub fn hex_to_color(hex: &str) -> Option<Color> {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn color_picker<'a, Message: Clone + 'static>(
+pub fn color_picker<Message: Clone + 'static>(
     hue: f32,
     sat: f32,
     bright: f32,
     alpha: f32,
-    hex_input: &'a str,
-    recent: &[Color],
-    on_hue_sat: impl Fn(f32, f32) -> Message + 'a,
-    on_brightness: impl Fn(f32) -> Message + 'a,
-    on_alpha: impl Fn(f32) -> Message + 'a,
-    on_hex: impl Fn(String) -> Message + 'a,
-    on_ok: impl Fn(Color) -> Message + 'a,
-    on_recent: impl Fn(Color) -> Message + 'a,
-) -> Element<'a, Message> {
+    hex_input: String,
+    recent: Vec<Color>,
+    on_hue_sat: impl Fn(f32, f32) -> Message + 'static,
+    on_brightness: impl Fn(f32) -> Message + 'static,
+    on_alpha: impl Fn(f32) -> Message + 'static,
+    on_hex: impl Fn(String) -> Message + 'static,
+    on_ok: impl Fn(Color) -> Message + 'static,
+    on_recent: impl Fn(Color) -> Message + 'static,
+) -> Element<'static, Message> {
     let spacing = theme::active().cosmic().spacing;
     let current = hsb_to_color(hue, sat, bright, alpha);
 
