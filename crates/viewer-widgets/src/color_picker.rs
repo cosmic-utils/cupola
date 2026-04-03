@@ -272,22 +272,22 @@ impl<Message: Clone + 'static> Widget<Message, cosmic::Theme, Renderer> for HsvG
 
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                if let Some(pos) = cursor.position() {
-                    if bounds.contains(pos) {
-                        grad_state.dragging = true;
-                        let (h, s) = self.point_to_hs(pos, bounds);
-                        shell.publish((self.on_pick)(h, s));
-                        return Status::Captured;
-                    }
+                if let Some(pos) = cursor.position()
+                    && bounds.contains(pos)
+                {
+                    grad_state.dragging = true;
+                    let (h, s) = self.point_to_hs(pos, bounds);
+                    shell.publish((self.on_pick)(h, s));
+                    return Status::Captured;
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                if grad_state.dragging {
-                    if let Some(pos) = cursor.position() {
-                        let (h, s) = self.point_to_hs(pos, bounds);
-                        shell.publish((self.on_pick)(h, s));
-                        return Status::Captured;
-                    }
+                if grad_state.dragging
+                    && let Some(pos) = cursor.position()
+                {
+                    let (h, s) = self.point_to_hs(pos, bounds);
+                    shell.publish((self.on_pick)(h, s));
+                    return Status::Captured;
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
@@ -310,10 +310,10 @@ impl<Message: Clone + 'static> Widget<Message, cosmic::Theme, Renderer> for HsvG
         _viewport: &Rectangle,
         _renderer: &Renderer,
     ) -> mouse::Interaction {
-        if let Some(pos) = cursor.position() {
-            if layout.bounds().contains(pos) {
-                return mouse::Interaction::Crosshair;
-            }
+        if let Some(pos) = cursor.position()
+            && layout.bounds().contains(pos)
+        {
+            return mouse::Interaction::Crosshair;
         }
         mouse::Interaction::default()
     }

@@ -316,13 +316,12 @@ fn transform_popout_menu(active: TransformSubTool) -> Element<'static, Message> 
 // --- Public functions ---
 
 pub fn tool_strip(props: &AnnotationProps) -> Element<'static, Message> {
-    let spacing = theme::active().cosmic().spacing;
     let active = props.tool;
 
     let mut strip = column()
-        .spacing(spacing.space_xxs)
+        .spacing(2)
         .align_x(Alignment::Center)
-        .width(Length::Fixed(STRIP_WIDTH));
+        .width(Length::Fill);
 
     // Pointer group
     let transform_btn = popout_btn(
@@ -384,7 +383,7 @@ pub fn tool_strip(props: &AnnotationProps) -> Element<'static, Message> {
     strip = strip.push(vertical_space());
 
     container(strip)
-        .padding(spacing.space_xxs)
+        .padding(4)
         .class(theme::Container::Dialog)
         .height(Length::Fill)
         .width(Length::Fixed(STRIP_WIDTH))
