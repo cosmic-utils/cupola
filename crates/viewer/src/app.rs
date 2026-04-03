@@ -378,25 +378,29 @@ impl ImageViewer {
         }
     }
 
-    fn create_preview_for_tool(&self, tool: AnnotateTool) -> Box<dyn ToolOperation> {
+    fn create_preview_for_tool(&self, tool: AnnotateTool) -> Option<Box<dyn ToolOperation>> {
         let color = self.annotate_color.0;
         let width = self.annotate_stroke;
         match tool {
-            // Pointer tools — preview behavior comes in a later task
-            AnnotateTool::Select | AnnotateTool::Move | AnnotateTool::Transform => {
-                Box::new(PenPreview::new(color, width))
-            }
-            AnnotateTool::Pen => Box::new(PenPreview::new(color, width)),
-            AnnotateTool::Highlighter => Box::new(HighlighterPreview::new(color, width)),
+            // Pointer tools don't draw — no preview needed
+            AnnotateTool::Select | AnnotateTool::Move | AnnotateTool::Transform => None,
+            AnnotateTool::Pen => Some(Box::new(PenPreview::new(color, width))),
+            AnnotateTool::Highlighter => Some(Box::new(HighlighterPreview::new(color, width))),
             AnnotateTool::Rectangle => {
-                Box::new(ShapePreview::new(ShapeKind::Rectangle, color, width))
+                Some(Box::new(ShapePreview::new(ShapeKind::Rectangle, color, width)))
             }
-            AnnotateTool::Ellipse => Box::new(ShapePreview::new(ShapeKind::Ellipse, color, width)),
-            AnnotateTool::Line => Box::new(ShapePreview::new(ShapeKind::Line, color, width)),
-            AnnotateTool::Arrow => Box::new(ShapePreview::new(ShapeKind::Arrow, color, width)),
-            AnnotateTool::Star => Box::new(ShapePreview::new(ShapeKind::Star, color, width)),
-            AnnotateTool::Polygon => Box::new(ShapePreview::new(ShapeKind::Polygon, color, width)),
-            AnnotateTool::Text => Box::new(TextPreview::new(
+            AnnotateTool::Ellipse => {
+                Some(Box::new(ShapePreview::new(ShapeKind::Ellipse, color, width)))
+            }
+            AnnotateTool::Line => Some(Box::new(ShapePreview::new(ShapeKind::Line, color, width))),
+            AnnotateTool::Arrow => {
+                Some(Box::new(ShapePreview::new(ShapeKind::Arrow, color, width)))
+            }
+            AnnotateTool::Star => Some(Box::new(ShapePreview::new(ShapeKind::Star, color, width))),
+            AnnotateTool::Polygon => {
+                Some(Box::new(ShapePreview::new(ShapeKind::Polygon, color, width)))
+            }
+            AnnotateTool::Text => Some(Box::new(TextPreview::new(
                 color,
                 self.text_font_size,
                 "sans-serif",
@@ -404,8 +408,8 @@ impl ImageViewer {
                 self.text_italic,
                 self.text_underline,
                 self.text_alignment,
-            )),
-            AnnotateTool::Crop => Box::new(CropPreview::new()),
+            ))),
+            AnnotateTool::Crop => Some(Box::new(CropPreview::new())),
         }
     }
 
@@ -2624,6 +2628,23 @@ fn alpha_blend(dst: ::image::Rgba<u8>, src: ::image::Rgba<u8>) -> ::image::Rgba<
     ])
 }
 
+/// Convert premultiplied RGBA (tiny_skia format) to straight RGBA (iced Handle format).
+fn unpremultiply(pixmap: &tiny_skia::Pixmap) -> Vec<u8> {
+    let pixels = pixmap.pixels();
+    let mut out = vec![0u8; pixels.len() * 4];
+    for (i, px) in pixels.iter().enumerate() {
+        let a = px.alpha() as f32 / 255.0;
+        let idx = i * 4;
+        if a > 0.0 {
+            out[idx] = (px.red() as f32 / a).min(255.0) as u8;
+            out[idx + 1] = (px.green() as f32 / a).min(255.0) as u8;
+            out[idx + 2] = (px.blue() as f32 / a).min(255.0) as u8;
+            out[idx + 3] = px.alpha();
+        }
+    }
+    out
+}
+
 fn render_operations_to_handle(
     operations: &[Box<dyn ToolOperation>],
     width: u32,
@@ -2641,7 +2662,7 @@ fn render_operations_to_handle(
     Some(cosmic::widget::image::Handle::from_rgba(
         width,
         height,
-        pixmap.data().to_vec(),
+        unpremultiply(&pixmap),
     ))
 }
 
@@ -2662,7 +2683,7 @@ fn render_ops_refs(
     Some(cosmic::widget::image::Handle::from_rgba(
         width,
         height,
-        pixmap.data().to_vec(),
+        unpremultiply(&pixmap),
     ))
 }
 

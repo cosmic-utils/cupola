@@ -97,8 +97,8 @@ impl EditState {
         }
     }
 
-    pub fn set_preview(&mut self, preview: Box<dyn ToolOperation>) {
-        self.active_preview = Some(preview);
+    pub fn set_preview(&mut self, preview: Option<Box<dyn ToolOperation>>) {
+        self.active_preview = preview;
     }
 
     pub fn cancel_tool(&mut self) {
