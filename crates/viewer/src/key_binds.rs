@@ -348,5 +348,13 @@ pub fn init_key_binds() -> HashMap<KeyBind, MenuAction> {
         MenuAction::Redo,
     );
 
+    binds.insert(
+        KeyBind {
+            modifiers: vec![Modifier::Ctrl, Modifier::Shift],
+            key: Key::Character("a".into()),
+        },
+        MenuAction::Annotate,
+    );
+
     binds
 }
