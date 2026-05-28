@@ -99,7 +99,7 @@ pub struct ImageViewer {
 }
 
 impl ImageViewer {
-    pub const APP_ID: &'static str = "org.codeberg.bhh32.CosmicViewer";
+    pub const APP_ID: &'static str = "org.codeberg.bhh32.Cupola";
 
     fn load_image(&mut self, path: PathBuf) -> Task<Action<Message>> {
         if self.cache.get_full(&path).is_some() || self.cache.is_pending(&path) {
@@ -386,20 +386,26 @@ impl ImageViewer {
             AnnotateTool::Select | AnnotateTool::Move | AnnotateTool::Transform => None,
             AnnotateTool::Pen => Some(Box::new(PenPreview::new(color, width))),
             AnnotateTool::Highlighter => Some(Box::new(HighlighterPreview::new(color, width))),
-            AnnotateTool::Rectangle => {
-                Some(Box::new(ShapePreview::new(ShapeKind::Rectangle, color, width)))
-            }
-            AnnotateTool::Ellipse => {
-                Some(Box::new(ShapePreview::new(ShapeKind::Ellipse, color, width)))
-            }
+            AnnotateTool::Rectangle => Some(Box::new(ShapePreview::new(
+                ShapeKind::Rectangle,
+                color,
+                width,
+            ))),
+            AnnotateTool::Ellipse => Some(Box::new(ShapePreview::new(
+                ShapeKind::Ellipse,
+                color,
+                width,
+            ))),
             AnnotateTool::Line => Some(Box::new(ShapePreview::new(ShapeKind::Line, color, width))),
             AnnotateTool::Arrow => {
                 Some(Box::new(ShapePreview::new(ShapeKind::Arrow, color, width)))
             }
             AnnotateTool::Star => Some(Box::new(ShapePreview::new(ShapeKind::Star, color, width))),
-            AnnotateTool::Polygon => {
-                Some(Box::new(ShapePreview::new(ShapeKind::Polygon, color, width)))
-            }
+            AnnotateTool::Polygon => Some(Box::new(ShapePreview::new(
+                ShapeKind::Polygon,
+                color,
+                width,
+            ))),
             AnnotateTool::Text => Some(Box::new(TextPreview::new(
                 color,
                 self.text_font_size,
@@ -1238,6 +1244,7 @@ impl Application for ImageViewer {
                 }
                 EditMessage::Undo => {
                     if self.edit_state.undo() {
+                        self.render_committed_overlay();
                         tasks.push(self.reload_with_edits().map(Action::from));
                         tasks.push(self.update_title().map(Action::from));
                     }
