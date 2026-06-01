@@ -19,6 +19,16 @@ pub enum TransformSubTool {
     Rotate,
 }
 
+impl TransformSubTool {
+    pub fn icon_name(&self) -> &'static str {
+        match self {
+            Self::Resize => "image-resize-symbolic",
+            Self::Skew => "object-skew-symbolic",
+            Self::Rotate => "object-rotate-right-symbolic",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CropRatio {
     #[default]
@@ -26,7 +36,6 @@ pub enum CropRatio {
     Square,
     FourThree,
     SixteenNine,
-    Custom,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

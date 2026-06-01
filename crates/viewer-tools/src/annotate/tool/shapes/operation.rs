@@ -17,17 +17,26 @@ pub struct ShapeOperation {
     pub kind: ShapeKind,
     pub start: Point,
     pub end: Point,
-    pub color: Color,
+    pub stroke_color: Color,
+    pub fill_color: Option<Color>,
     pub width: f32,
 }
 
 impl ShapeOperation {
-    pub fn new(kind: ShapeKind, start: Point, end: Point, color: Color, width: f32) -> Self {
+    pub fn new(
+        kind: ShapeKind,
+        start: Point,
+        end: Point,
+        stroke_color: Color,
+        fill_color: Option<Color>,
+        width: f32,
+    ) -> Self {
         Self {
             kind,
             start,
             end,
-            color,
+            stroke_color,
+            fill_color,
             width,
         }
     }
@@ -57,7 +66,14 @@ impl ShapeOperation {
 impl ToolOperation for ShapeOperation {
     fn render(&self, pixmap: &mut Pixmap, _image_size: Size, scale: f32) {
         render_shape(
-            self.kind, self.start, self.end, self.color, self.width, pixmap, scale,
+            self.kind,
+            self.start,
+            self.end,
+            self.stroke_color,
+            self.fill_color,
+            self.width,
+            pixmap,
+            scale,
         );
     }
 
@@ -80,14 +96,14 @@ impl ToolOperation for ShapeOperation {
                 }) else {
                     return;
                 };
-                fill_on_image(image, &path, self.color);
+                fill_on_image(image, &path, self.fill_color.unwrap_or(self.stroke_color));
             }
             ShapeKind::Arrow => {
                 if let Some(shaft) = build_path(|pb| {
                     pb.move_to(self.start.x, self.start.y);
                     pb.line_to(self.end.x, self.end.y);
                 }) {
-                    stroke_on_image(image, &shaft, self.color, self.width, LineCap::Round);
+                    stroke_on_image(image, &shaft, self.stroke_color, self.width, LineCap::Round);
                 }
                 let segs = arrow_segments(self.start, self.end);
                 if segs.len() >= 3 {
@@ -100,7 +116,7 @@ impl ToolOperation for ShapeOperation {
                         pb.line_to(right.x, right.y);
                         pb.close();
                     }) {
-                        fill_on_image(image, &head, self.color);
+                        fill_on_image(image, &head, self.stroke_color);
                     }
                 }
             }
@@ -129,7 +145,12 @@ impl ToolOperation for ShapeOperation {
                 }) else {
                     return;
                 };
-                stroke_on_image(image, &path, self.color, self.width, LineCap::Round);
+                if matches!(self.kind, ShapeKind::Rectangle | ShapeKind::Ellipse)
+                    && let Some(fill) = self.fill_color
+                {
+                    fill_on_image(image, &path, fill);
+                }
+                stroke_on_image(image, &path, self.stroke_color, self.width, LineCap::Round);
             }
         }
     }

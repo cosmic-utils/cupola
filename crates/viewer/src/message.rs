@@ -4,7 +4,7 @@ use cosmic::iced::{Color, Point};
 use cosmic::widget::image::Handle;
 use std::{path::PathBuf, sync::Arc};
 use viewer_config::{AppTheme, SortMode, SortOrder, ThumbnailSize, WallpaperBehavior};
-use viewer_tools::annotate::{AnnotateColor, AnnotateTool, CropRatio, PenMode};
+use viewer_tools::annotate::{AnnotateColor, AnnotateTool, CropRatio, PenMode, TransformSubTool};
 
 pub use crate::key_binds::MenuAction;
 
@@ -169,6 +169,7 @@ pub enum EditMessage {
     Undo,
     Redo,
     SetTool(AnnotateTool),
+    SetTransformSubTool(TransformSubTool),
     SetColor(AnnotateColor),
     SetStrokeWidth(f32),
     ToolStart(Point),
@@ -177,6 +178,7 @@ pub enum EditMessage {
     CommitTool,
     CancelTool,
     SetFontSize(f32),
+    SetFontFamily(&'static str),
     SetBold(bool),
     SetItalic(bool),
     SetUnderline(bool),
@@ -188,7 +190,7 @@ pub enum EditMessage {
     SetFillMode(bool),
     SetCropRatio(CropRatio),
     CancelAnnotation,
-    OpenColorPicker,
+    OpenColorPicker(PickerTarget),
     CloseColorPicker,
     SetCustomColor(Color),
     PickerHueSat(f32, f32),

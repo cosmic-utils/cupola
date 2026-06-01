@@ -5,10 +5,13 @@ use crate::{
     key_binds::{self, MenuAction},
     menu::menu_bar,
     message::{
-        ContextPage, DeleteAction, EditMessage, ImageMessage, Message, NavMessage, SettingsMessage,
-        ViewMessage,
+        ContextPage, DeleteAction, EditMessage, ImageMessage, Message, NavMessage, PickerTarget,
+        SettingsMessage, ViewMessage,
     },
-    views::{GalleryView, ImageViewState, annotation_page, annotation_toolbar::AnnotationProps},
+    views::{
+        GalleryView, ImageViewState, annotation_page,
+        annotation_toolbar::{AnnotationProps, Breakpoint},
+    },
     watcher,
 };
 use ashpd::{
@@ -77,9 +80,12 @@ pub struct ImageViewer {
     text_font_size: f32,
     text_alignment: cosmic::iced::alignment::Horizontal,
     text_strikethrough: bool,
+    text_font_family: &'static str,
     pen_mode: PenMode,
     highlighter_opacity: f32,
     shape_fill_mode: bool,
+    shape_fill_color: cosmic::iced::Color,
+    picker_target: PickerTarget,
     crop_ratio: CropRatio,
     color_picker_open: bool,
     picker_hue: f32,
@@ -381,6 +387,7 @@ impl ImageViewer {
     fn create_preview_for_tool(&self, tool: AnnotateTool) -> Option<Box<dyn ToolOperation>> {
         let color = self.annotate_color.0;
         let width = self.annotate_stroke;
+        let fill = self.shape_fill_mode.then_some(self.shape_fill_color);
         match tool {
             // Pointer tools don't draw — no preview needed
             AnnotateTool::Select | AnnotateTool::Move | AnnotateTool::Transform => None,
@@ -389,33 +396,40 @@ impl ImageViewer {
             AnnotateTool::Rectangle => Some(Box::new(ShapePreview::new(
                 ShapeKind::Rectangle,
                 color,
+                fill,
                 width,
             ))),
             AnnotateTool::Ellipse => Some(Box::new(ShapePreview::new(
                 ShapeKind::Ellipse,
                 color,
+                fill,
                 width,
             ))),
-            AnnotateTool::Line => Some(Box::new(ShapePreview::new(ShapeKind::Line, color, width))),
-            AnnotateTool::Arrow => {
-                Some(Box::new(ShapePreview::new(ShapeKind::Arrow, color, width)))
+            AnnotateTool::Line => {
+                Some(Box::new(ShapePreview::new(ShapeKind::Line, color, fill, width)))
             }
-            AnnotateTool::Star => Some(Box::new(ShapePreview::new(ShapeKind::Star, color, width))),
+            AnnotateTool::Arrow => {
+                Some(Box::new(ShapePreview::new(ShapeKind::Arrow, color, fill, width)))
+            }
+            AnnotateTool::Star => {
+                Some(Box::new(ShapePreview::new(ShapeKind::Star, color, fill, width)))
+            }
             AnnotateTool::Polygon => Some(Box::new(ShapePreview::new(
                 ShapeKind::Polygon,
                 color,
+                fill,
                 width,
             ))),
             AnnotateTool::Text => Some(Box::new(TextPreview::new(
                 color,
                 self.text_font_size,
-                "sans-serif",
+                self.text_font_family,
                 self.text_bold,
                 self.text_italic,
                 self.text_underline,
                 self.text_alignment,
             ))),
-            AnnotateTool::Crop => Some(Box::new(CropPreview::new())),
+            AnnotateTool::Crop => Some(Box::new(CropPreview::new(self.crop_ratio))),
         }
     }
 
@@ -441,11 +455,13 @@ impl ImageViewer {
             pen_mode: self.pen_mode,
             opacity: self.highlighter_opacity,
             fill_mode: self.shape_fill_mode,
+            fill_color: self.shape_fill_color,
             bold: self.text_bold,
             italic: self.text_italic,
             underline: self.text_underline,
             strikethrough: self.text_strikethrough,
             font_size: self.text_font_size,
+            font_family: self.text_font_family,
             alignment: self.text_alignment,
             crop_ratio: self.crop_ratio,
             can_undo: self.edit_state.has_operations(),
@@ -462,6 +478,7 @@ impl ImageViewer {
             picker_alpha: self.picker_alpha,
             picker_hex: self.picker_hex.clone(),
             recent_colors: self.recent_colors.clone(),
+            breakpoint: Breakpoint::from_width(self.image_state.window_width),
         };
 
         if let Some(ref preview) = self.image_state.preview_image {
@@ -634,9 +651,12 @@ impl Application for ImageViewer {
             text_font_size: 20.0,
             text_alignment: cosmic::iced::alignment::Horizontal::Left,
             text_strikethrough: false,
+            text_font_family: "sans-serif",
             pen_mode: PenMode::default(),
             highlighter_opacity: 0.5,
             shape_fill_mode: false,
+            shape_fill_color: cosmic::iced::Color::WHITE,
+            picker_target: PickerTarget::default(),
             crop_ratio: CropRatio::default(),
             color_picker_open: false,
             picker_hue: 0.0,
@@ -1301,6 +1321,33 @@ impl Application for ImageViewer {
                     self.edit_state.set_preview(preview);
                     self.render_preview_overlay();
                 }
+                EditMessage::SetTransformSubTool(sub) => {
+                    self.active_transform = sub;
+                    self.transform_popout_open = false;
+
+                    if self.edit_state.active_preview.is_some()
+                        && self.auto_commits(self.annotate_tool)
+                    {
+                        self.edit_state.commit_preview();
+                        self.render_committed_overlay();
+                    }
+
+                    self.annotate_tool = AnnotateTool::Transform;
+                    self.edit_state.active_tool = Some(AnnotateTool::Transform);
+
+                    if !self.is_annotating {
+                        self.is_annotating = true;
+                        if let Some(current_path) = self.nav.current()
+                            && !self.edit_state.is_editing()
+                        {
+                            self.edit_state.start_editing(current_path.clone());
+                        }
+                    }
+
+                    let preview = self.create_preview_for_tool(AnnotateTool::Transform);
+                    self.edit_state.set_preview(preview);
+                    self.render_preview_overlay();
+                }
                 EditMessage::SetColor(color) => {
                     self.annotate_color = color;
                     // Update active preview color via downcast
@@ -1313,7 +1360,7 @@ impl Application for ImageViewer {
                             p.color = color.0;
                         } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>()
                         {
-                            p.color = color.0;
+                            p.stroke_color = color.0;
                         } else if let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>() {
                             p.color = color.0;
                         }
@@ -1396,6 +1443,14 @@ impl Application for ImageViewer {
                         p.font_size = s;
                     }
                 }
+                EditMessage::SetFontFamily(family) => {
+                    self.text_font_family = family;
+                    if let Some(ref mut preview) = self.edit_state.active_preview
+                        && let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>()
+                    {
+                        p.font_family = family;
+                    }
+                }
                 EditMessage::SetBold(b) => {
                     self.text_bold = b;
                     if let Some(ref mut preview) = self.edit_state.active_preview
@@ -1447,6 +1502,13 @@ impl Application for ImageViewer {
                 }
                 EditMessage::SetCropRatio(ratio) => {
                     self.crop_ratio = ratio;
+                    let (w, h) = self.current_image_size();
+                    if let Some(ref mut preview) = self.edit_state.active_preview
+                        && let Some(p) = preview.as_any_mut().downcast_mut::<CropPreview>()
+                    {
+                        p.set_ratio(ratio, w as f32, h as f32);
+                    }
+                    self.render_preview_overlay();
                 }
                 EditMessage::CancelAnnotation => {
                     self.is_annotating = false;
@@ -1458,27 +1520,44 @@ impl Application for ImageViewer {
                     self.shape_popout_open = false;
                     self.transform_popout_open = false;
                 }
-                EditMessage::OpenColorPicker => {
+                EditMessage::OpenColorPicker(target) => {
+                    self.picker_target = target;
                     self.color_picker_open = true;
                 }
                 EditMessage::CloseColorPicker => {
                     self.color_picker_open = false;
                 }
                 EditMessage::SetCustomColor(color) => {
-                    let annotate_color = AnnotateColor(color);
-                    self.annotate_color = annotate_color;
-                    if let Some(ref mut preview) = self.edit_state.active_preview {
-                        if let Some(p) = preview.as_any_mut().downcast_mut::<PenPreview>() {
-                            p.color = color;
-                        } else if let Some(p) =
-                            preview.as_any_mut().downcast_mut::<HighlighterPreview>()
-                        {
-                            p.color = color;
-                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<ShapePreview>()
-                        {
-                            p.color = color;
-                        } else if let Some(p) = preview.as_any_mut().downcast_mut::<TextPreview>() {
-                            p.color = color;
+                    match self.picker_target {
+                        PickerTarget::Fill => {
+                            self.shape_fill_color = color;
+                            self.shape_fill_mode = true;
+                            if let Some(ref mut preview) = self.edit_state.active_preview
+                                && let Some(p) =
+                                    preview.as_any_mut().downcast_mut::<ShapePreview>()
+                            {
+                                p.fill_color = Some(color);
+                            }
+                        }
+                        PickerTarget::Stroke => {
+                            self.annotate_color = AnnotateColor(color);
+                            if let Some(ref mut preview) = self.edit_state.active_preview {
+                                if let Some(p) = preview.as_any_mut().downcast_mut::<PenPreview>() {
+                                    p.color = color;
+                                } else if let Some(p) =
+                                    preview.as_any_mut().downcast_mut::<HighlighterPreview>()
+                                {
+                                    p.color = color;
+                                } else if let Some(p) =
+                                    preview.as_any_mut().downcast_mut::<ShapePreview>()
+                                {
+                                    p.stroke_color = color;
+                                } else if let Some(p) =
+                                    preview.as_any_mut().downcast_mut::<TextPreview>()
+                                {
+                                    p.color = color;
+                                }
+                            }
                         }
                     }
                     self.recent_colors.retain(|&c| {

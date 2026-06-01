@@ -1,4 +1,5 @@
 use crate::ToolOperation;
+use crate::annotate::CropRatio;
 use crate::renderer::{build_path, fill_on_pixmap, stroke_on_pixmap};
 use super::CropOperation;
 
@@ -33,6 +34,7 @@ pub enum CropDragHandle {
 #[derive(Debug, Clone)]
 pub struct CropPreview {
     pub region: Option<(f32, f32, f32, f32)>,
+    pub ratio: CropRatio,
     pub is_dragging: bool,
     pub drag_handle: CropDragHandle,
     pub drag_start: Option<(f32, f32)>,
@@ -40,14 +42,46 @@ pub struct CropPreview {
 }
 
 impl CropPreview {
-    pub fn new() -> Self {
+    pub fn new(ratio: CropRatio) -> Self {
         Self {
             region: None,
+            ratio,
             is_dragging: false,
             drag_handle: CropDragHandle::None,
             drag_start: None,
             drag_start_region: None,
         }
+    }
+
+    pub fn set_ratio(&mut self, ratio: CropRatio, img_width: f32, img_height: f32) {
+        self.ratio = ratio;
+        self.apply_aspect(img_width, img_height);
+    }
+
+    /// Force the current region to match the locked aspect ratio (no-op for Free),
+    /// anchoring at the top-left and clamping within the image bounds.
+    fn apply_aspect(&mut self, img_width: f32, img_height: f32) {
+        let Some(aspect) = aspect_ratio(self.ratio) else {
+            return;
+        };
+        let Some((rx, ry, rw, _rh)) = self.region else {
+            return;
+        };
+        if rw <= 0.0 {
+            return;
+        }
+
+        let mut w = rw;
+        let mut h = rw / aspect;
+        if ry + h > img_height {
+            h = (img_height - ry).max(0.0);
+            w = h * aspect;
+        }
+        if rx + w > img_width {
+            w = (img_width - rx).max(0.0);
+            h = w / aspect;
+        }
+        self.region = Some((rx, ry, w, h));
     }
 
     pub fn has_selection(&self) -> bool {
@@ -129,6 +163,10 @@ impl CropPreview {
                     self.region = Some(resized);
                 }
             }
+        }
+
+        if self.drag_handle != CropDragHandle::Move {
+            self.apply_aspect(img_width, img_height);
         }
     }
 
@@ -233,7 +271,7 @@ impl CropPreview {
 
 impl Default for CropPreview {
     fn default() -> Self {
-        Self::new()
+        Self::new(CropRatio::default())
     }
 }
 
@@ -395,5 +433,14 @@ fn resize_region(
             (rx, ry, new_right - rx, rh)
         }
         _ => (rx, ry, rw, rh),
+    }
+}
+
+fn aspect_ratio(ratio: CropRatio) -> Option<f32> {
+    match ratio {
+        CropRatio::Free => None,
+        CropRatio::Square => Some(1.0),
+        CropRatio::FourThree => Some(4.0 / 3.0),
+        CropRatio::SixteenNine => Some(16.0 / 9.0),
     }
 }

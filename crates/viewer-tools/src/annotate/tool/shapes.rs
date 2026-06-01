@@ -24,7 +24,8 @@ pub(crate) fn render_shape(
     kind: ShapeKind,
     start: Point,
     end: Point,
-    color: Color,
+    stroke_color: Color,
+    fill_color: Option<Color>,
     width: f32,
     pixmap: &mut Pixmap,
     scale: f32,
@@ -47,7 +48,7 @@ pub(crate) fn render_shape(
             }) else {
                 return;
             };
-            fill_on_pixmap(pixmap, &path, color);
+            fill_on_pixmap(pixmap, &path, fill_color.unwrap_or(stroke_color));
         }
         ShapeKind::Arrow => {
             // Stroke the shaft
@@ -58,7 +59,7 @@ pub(crate) fn render_shape(
                 stroke_on_pixmap(
                     pixmap,
                     &shaft,
-                    color,
+                    stroke_color,
                     width / scale,
                     LineCap::Round,
                     LineJoin::Round,
@@ -72,17 +73,22 @@ pub(crate) fn render_shape(
                 pb.line_to(right.x, right.y);
                 pb.close();
             }) {
-                fill_on_pixmap(pixmap, &head, color);
+                fill_on_pixmap(pixmap, &head, stroke_color);
             }
         }
         _ => {
             let Some(path) = build_shape_path(kind, start, end) else {
                 return;
             };
+            if matches!(kind, ShapeKind::Rectangle | ShapeKind::Ellipse)
+                && let Some(fill) = fill_color
+            {
+                fill_on_pixmap(pixmap, &path, fill);
+            }
             stroke_on_pixmap(
                 pixmap,
                 &path,
-                color,
+                stroke_color,
                 width / scale,
                 LineCap::Round,
                 LineJoin::Round,

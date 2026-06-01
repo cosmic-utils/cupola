@@ -12,17 +12,19 @@ pub struct ShapePreview {
     pub kind: ShapeKind,
     pub start: Option<Point>,
     pub end: Option<Point>,
-    pub color: Color,
+    pub stroke_color: Color,
+    pub fill_color: Option<Color>,
     pub width: f32,
 }
 
 impl ShapePreview {
-    pub fn new(kind: ShapeKind, color: Color, width: f32) -> Self {
+    pub fn new(kind: ShapeKind, stroke_color: Color, fill_color: Option<Color>, width: f32) -> Self {
         Self {
             kind,
             start: None,
             end: None,
-            color,
+            stroke_color,
+            fill_color,
             width,
         }
     }
@@ -31,7 +33,16 @@ impl ShapePreview {
 impl ToolOperation for ShapePreview {
     fn render(&self, pixmap: &mut Pixmap, _image_size: Size, scale: f32) {
         if let (Some(start), Some(end)) = (self.start, self.end) {
-            render_shape(self.kind, start, end, self.color, self.width, pixmap, scale);
+            render_shape(
+                self.kind,
+                start,
+                end,
+                self.stroke_color,
+                self.fill_color,
+                self.width,
+                pixmap,
+                scale,
+            );
         }
     }
 
@@ -44,7 +55,12 @@ impl ToolOperation for ShapePreview {
         };
 
         Some(Box::new(ShapeOperation::new(
-            self.kind, start, end, self.color, self.width,
+            self.kind,
+            start,
+            end,
+            self.stroke_color,
+            self.fill_color,
+            self.width,
         )))
     }
 
