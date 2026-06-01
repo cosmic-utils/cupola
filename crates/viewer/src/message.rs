@@ -148,10 +148,18 @@ pub enum SettingsMessage {
     SortOrder(SortOrder),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PickerTarget {
+    #[default]
+    Stroke,
+    Fill,
+}
+
 #[derive(Debug, Clone)]
 pub enum EditMessage {
     Rotate90,
     Rotate180,
+    Rotate270,
     FlipHorizontal,
     FlipVertical,
     Save,

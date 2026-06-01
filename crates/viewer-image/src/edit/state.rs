@@ -1,16 +1,15 @@
-use std::path::PathBuf;
-
-use viewer_tools::annotate::AnnotateTool;
-use viewer_tools::ToolOperation;
-use viewer_types::CropRegion;
-
 use image::DynamicImage;
+use std::path::PathBuf;
+use viewer_tools::ToolOperation;
+use viewer_tools::annotate::AnnotateTool;
+use viewer_types::CropRegion;
 
 /// A transformation to an image
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Transform {
     Rotate90,
     Rotate180,
+    Rotate270,
     FlipHorizontal,
     FlipVertical,
 }
@@ -108,15 +107,13 @@ impl EditState {
     pub fn undo(&mut self) -> bool {
         if let Some(op) = self.operations.pop() {
             self.redo_stack.push(op);
-            self.is_modified = !self.operations.is_empty()
-                || !self.transforms.is_empty()
-                || self.crop.is_some();
+            self.is_modified =
+                !self.operations.is_empty() || !self.transforms.is_empty() || self.crop.is_some();
             return true;
         }
         if self.transforms.pop().is_some() {
-            self.is_modified = !self.transforms.is_empty()
-                || !self.operations.is_empty()
-                || self.crop.is_some();
+            self.is_modified =
+                !self.transforms.is_empty() || !self.operations.is_empty() || self.crop.is_some();
             return true;
         }
         false

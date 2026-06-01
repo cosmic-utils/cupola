@@ -27,6 +27,7 @@ pub fn apply_transform(img: &DynamicImage, transform: Transform) -> DynamicImage
     match transform {
         Transform::Rotate90 => img.rotate90(),
         Transform::Rotate180 => img.rotate180(),
+        Transform::Rotate270 => img.rotate270(),
         Transform::FlipHorizontal => img.fliph(),
         Transform::FlipVertical => img.flipv(),
     }

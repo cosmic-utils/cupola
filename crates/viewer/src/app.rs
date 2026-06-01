@@ -1137,6 +1137,18 @@ impl Application for ImageViewer {
                         tasks.push(self.update_title().map(Action::from));
                     }
                 }
+                EditMessage::Rotate270 => {
+                    if let Some(current_path) = self.nav.current() {
+                        if !self.edit_state.is_editing() {
+                            self.edit_state.start_editing(current_path.clone());
+                        }
+
+                        self.edit_state.apply_transform(Transform::Rotate270);
+
+                        tasks.push(self.reload_with_edits().map(Action::from));
+                        tasks.push(self.update_title().map(Action::from));
+                    }
+                }
                 EditMessage::FlipHorizontal => {
                     if let Some(current_path) = self.nav.current() {
                         if !self.edit_state.is_editing() {
